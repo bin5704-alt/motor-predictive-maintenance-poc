@@ -89,11 +89,11 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 flutter_native_splash:
-  color: "#003366" # 팀장님이 고르신 Deep Blue
+  color: "#FFFFFF" # 팀장님이 고르신 Deep Blue
   image: assets/images/app_logo.png
   android: true
   ios: true
 
   android_12:
-    color: "#003366"
+    color: "#FFFFFF"
     image: assets/images/app_logo.png
