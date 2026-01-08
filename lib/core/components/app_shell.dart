@@ -4,7 +4,18 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import '../ui/m_design_system.dart';
 
 // Simple state for navigation index - in a real app this might be connected to GoRouter
-final _navigationIndexProvider = StateProvider<int>((ref) => 0);
+final _navigationIndexProvider = NotifierProvider<NavigationIndexNotifier, int>(
+  NavigationIndexNotifier.new,
+);
+
+class NavigationIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void setIndex(int index) {
+    state = index;
+  }
+}
 
 class AppShell extends ConsumerWidget {
   final Widget child;
@@ -24,23 +35,23 @@ class AppShell extends ConsumerWidget {
             NavigationRail(
               selectedIndex: navIndex,
               onDestinationSelected: (index) {
-                ref.read(_navigationIndexProvider.notifier).state = index;
+                ref.read(_navigationIndexProvider.notifier).setIndex(index);
               },
               extended: MediaQuery.of(context).size.width > 1200,
               minExtendedWidth: 200,
               groupAlignment: -0.9, // Align to top
               destinations: const [
-                 NavigationRailDestination(
+                NavigationRailDestination(
                   icon: Icon(LucideIcons.layout_dashboard),
                   selectedIcon: Icon(LucideIcons.layout_dashboard),
                   label: Text('Dashboard'),
                 ),
-                 NavigationRailDestination(
+                NavigationRailDestination(
                   icon: Icon(LucideIcons.activity),
                   selectedIcon: Icon(LucideIcons.activity),
                   label: Text('Monitoring'),
                 ),
-                 NavigationRailDestination(
+                NavigationRailDestination(
                   icon: Icon(LucideIcons.settings),
                   selectedIcon: Icon(LucideIcons.settings),
                   label: Text('Settings'),
@@ -48,8 +59,12 @@ class AppShell extends ConsumerWidget {
               ],
             ),
           if (isDesktop)
-             const VerticalDivider(thickness: 1, width: 1, color: AppColors.border),
-          
+            const VerticalDivider(
+              thickness: 1,
+              width: 1,
+              color: AppColors.border,
+            ),
+
           Expanded(
             child: Column(
               children: [
@@ -65,7 +80,7 @@ class AppShell extends ConsumerWidget {
           : NavigationBar(
               selectedIndex: navIndex,
               onDestinationSelected: (index) {
-                ref.read(_navigationIndexProvider.notifier).state = index;
+                ref.read(_navigationIndexProvider.notifier).setIndex(index);
               },
               destinations: const [
                 NavigationDestination(
