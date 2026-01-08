@@ -3,8 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import '../ui/m_design_system.dart';
 
-// Simple state for navigation index - in a real app this might be connected to GoRouter
-final navigationIndexProvider = StateProvider<int>((ref) => 0);
+// Simple state for navigation index
+class NavigationIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  @override
+  set state(int value) => super.state = value;
+}
+
+final navigationIndexProvider = NotifierProvider<NavigationIndexNotifier, int>(NavigationIndexNotifier.new);
 
 class AppShell extends ConsumerWidget {
   final Widget child;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
-import '../../core/ui/m_design_system.dart';
 import '../../core/components/app_card.dart';
 import '../../core/components/app_text.dart';
 import '../../core/components/app_button.dart';
@@ -57,7 +56,7 @@ class DashboardScreen extends StatelessWidget {
         _buildStatCard('Total Units', '124', 'All systems active', LucideIcons.server, Colors.blue),
         _buildStatCard('Operational', '118', '95% uptime', LucideIcons.activity, Colors.green),
         _buildStatCard('Maintenance', '4', 'Scheduled checkup', LucideIcons.wrench, Colors.orange),
-        _buildStatCard('Critical', '2', 'Action required', LucideIcons.alert_triangle, Colors.red),
+        _buildStatCard('Critical', '2', 'Action required', LucideIcons.triangle_alert, Colors.red),
       ].map((widget) => SizedBox(
         width: isMobile ? double.infinity : 280, // Responsive width
         child: widget
@@ -77,7 +76,7 @@ class DashboardScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: color, size: 18),
@@ -129,7 +128,7 @@ class DashboardScreen extends StatelessWidget {
                   Expanded(
                     child: ListView.separated(
                       itemCount: 5,
-                      separatorBuilder: (_, __) => const Divider(height: 24),
+                      separatorBuilder: (_, _) => const Divider(height: 24),
                       itemBuilder: (context, index) {
                         return Row(
                           children: [
