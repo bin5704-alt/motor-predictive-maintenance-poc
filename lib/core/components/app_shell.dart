@@ -3,15 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import '../ui/m_design_system.dart';
 
-// Simple state for navigation index
-class NavigationIndexNotifier extends Notifier<int> {
-  @override
-  int build() => 0;
-  @override
-  set state(int value) => super.state = value;
-}
-
-final navigationIndexProvider = NotifierProvider<NavigationIndexNotifier, int>(NavigationIndexNotifier.new);
+// Simple state for navigation index - in a real app this might be connected to GoRouter
+final _navigationIndexProvider = StateProvider<int>((ref) => 0);
 
 class AppShell extends ConsumerWidget {
   final Widget child;
@@ -20,7 +13,7 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final navIndex = ref.watch(navigationIndexProvider);
+    final navIndex = ref.watch(_navigationIndexProvider);
     // Breakpoint standard: 800px for Tablet/Desktop split
     final isDesktop = MediaQuery.of(context).size.width > 800;
 
@@ -31,7 +24,7 @@ class AppShell extends ConsumerWidget {
             NavigationRail(
               selectedIndex: navIndex,
               onDestinationSelected: (index) {
-                ref.read(navigationIndexProvider.notifier).state = index;
+                ref.read(_navigationIndexProvider.notifier).state = index;
               },
               extended: MediaQuery.of(context).size.width > 1200,
               minExtendedWidth: 200,
@@ -72,7 +65,7 @@ class AppShell extends ConsumerWidget {
           : NavigationBar(
               selectedIndex: navIndex,
               onDestinationSelected: (index) {
-                ref.read(navigationIndexProvider.notifier).state = index;
+                ref.read(_navigationIndexProvider.notifier).state = index;
               },
               destinations: const [
                 NavigationDestination(
