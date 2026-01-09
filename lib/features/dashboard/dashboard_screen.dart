@@ -6,6 +6,8 @@ import 'data/equipment_model.dart';
 import '../../core/components/app_card.dart';
 import '../../core/components/app_text.dart';
 import '../../core/components/app_button.dart';
+import '../equipment/add_equipment_screen.dart';
+import 'widgets/equipment_card.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -156,99 +158,169 @@ class DashboardScreen extends ConsumerWidget {
     // Show only active alerts (Critical status)
     final criticalItems = items.where((e) => e.status == 'Critical').toList();
 
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 2,
-          child: AppCard(
-            height: 400,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const AppText(
-                  'Efficiency Trends',
-                  size: AppTextSize.lg,
-                  weight: FontWeight.w600,
-                ),
-                const SizedBox(height: 20),
-                Expanded(
-                  child: Center(
-                    child: AppText(
-                      'Chart Placeholder (ApexCharts/FlChart would go here)',
-                      isMuted: true,
-                    ),
-                  ),
-                ),
-              ],
+        // Registered Equipment Section
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const AppText(
+              'Registered Equipment',
+              size: AppTextSize.lg,
+              weight: FontWeight.w600,
             ),
-          ),
+            AppButton(
+              label: 'Add New',
+              variant: AppButtonVariant.ghost,
+              icon: const Icon(LucideIcons.plus, size: 16),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AddEquipmentScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
-        if (MediaQuery.of(context).size.width > 900) ...[
-          const SizedBox(width: 24),
-          Expanded(
-            flex: 1,
-            child: AppCard(
-              height: 400,
+        const SizedBox(height: 16),
+        if (items.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const AppText(
-                    'Recent Alerts',
-                    size: AppTextSize.lg,
-                    weight: FontWeight.w600,
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: criticalItems.isEmpty
-                        ? Center(
-                            child: AppText('No critical alerts', isMuted: true),
-                          )
-                        : ListView.separated(
-                            itemCount: criticalItems.length,
-                            separatorBuilder: (_, _) =>
-                                const Divider(height: 24),
-                            itemBuilder: (context, index) {
-                              final item = criticalItems[index];
-                              return Row(
-                                children: [
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        AppText(
-                                          '${item.name} status is ${item.status}',
-                                          size: AppTextSize.sm,
-                                          weight: FontWeight.w500,
-                                        ),
-                                        AppText(
-                                          'Efficiency: ${item.efficiency}%',
-                                          size: AppTextSize.xs,
-                                          isMuted: true,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                  ),
+                  const Icon(LucideIcons.box, size: 48, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  AppText('No equipment registered', isMuted: true),
                 ],
               ),
             ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: MediaQuery.of(context).size.width > 1200
+                  ? 3
+                  : (MediaQuery.of(context).size.width > 800 ? 2 : 1),
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.8, // Adjust based on card content
+            ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              return EquipmentCard(
+                equipment: items[index],
+                onTap: () {
+                  // Navigate to details
+                },
+              );
+            },
           ),
-        ],
+
+        const SizedBox(height: 32),
+
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: AppCard(
+                height: 400,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const AppText(
+                      'Efficiency Trends',
+                      size: AppTextSize.lg,
+                      weight: FontWeight.w600,
+                    ),
+                    const SizedBox(height: 20),
+                    Expanded(
+                      child: Center(
+                        child: AppText(
+                          'Chart Placeholder (ApexCharts/FlChart)',
+                          isMuted: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (MediaQuery.of(context).size.width > 900) ...[
+              const SizedBox(width: 24),
+              Expanded(
+                flex: 1,
+                child: AppCard(
+                  height: 400,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const AppText(
+                        'Recent Alerts',
+                        size: AppTextSize.lg,
+                        weight: FontWeight.w600,
+                      ),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: criticalItems.isEmpty
+                            ? Center(
+                                child: AppText(
+                                  'No critical alerts',
+                                  isMuted: true,
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: criticalItems.length,
+                                separatorBuilder: (_, _) =>
+                                    const Divider(height: 24),
+                                itemBuilder: (context, index) {
+                                  final item = criticalItems[index];
+                                  return Row(
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            AppText(
+                                              '${item.name} status is ${item.status}',
+                                              size: AppTextSize.sm,
+                                              weight: FontWeight.w500,
+                                            ),
+                                            AppText(
+                                              'Efficiency: ${item.efficiency}%',
+                                              size: AppTextSize.xs,
+                                              isMuted: true,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ],
     );
   }

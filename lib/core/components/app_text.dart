@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../ui/m_design_system.dart';
 
 enum AppTextSize {
   xs, // 11px
@@ -35,17 +34,17 @@ class AppText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseStyle = _getStyle(context);
-    final effectiveColor = isMuted ? AppColors.textSecondary : (color ?? AppColors.textPrimary);
+    final theme = Theme.of(context);
+    final effectiveColor = isMuted
+        ? theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6)
+        : (color ?? theme.textTheme.bodyLarge?.color);
 
     return Text(
       data,
       textAlign: align,
       maxLines: maxLines,
       overflow: overflow,
-      style: baseStyle.copyWith(
-        fontWeight: weight,
-        color: effectiveColor,
-      ),
+      style: baseStyle.copyWith(fontWeight: weight, color: effectiveColor),
     );
   }
 

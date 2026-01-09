@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'core/ui/m_design_system.dart';
-import 'core/components/app_shell.dart';
-import 'features/dashboard/dashboard_screen.dart';
+import 'theme/app_theme.dart';
+import 'features/auth/auth_gate.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -26,9 +25,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Enterprise Equipment Monitoring',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      // Use AppShell to wrap the DashboardScreen
-      home: const AppShell(child: DashboardScreen()),
+      theme: AppTheme.darkTheme,
+      // AuthGate handles the initial redirect based on session
+      home: const AuthGate(),
     );
   }
 }
