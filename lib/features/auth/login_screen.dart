@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/components/app_notification.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -35,17 +36,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // AuthGate will handle navigation upon session change
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppNotification(context, e.message, type: NotificationType.error);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unexpected error occurred'),
-            backgroundColor: Colors.red,
-          ),
+        showAppNotification(
+          context,
+          'Unexpected error occurred',
+          type: NotificationType.error,
         );
       }
     } finally {
@@ -63,11 +61,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Social login failed: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showAppNotification(
+          context,
+          'Social login failed: $e',
+          type: NotificationType.error,
         );
       }
     }
@@ -177,10 +174,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   icon: LucideIcons.search, // Placeholder
                   onPressed: () {
                     // Naver support might require custom configuration or specific provider string
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Naver Login requires additional config'),
-                      ),
+                    showAppNotification(
+                      context,
+                      'Naver Login requires additional config',
+                      type: NotificationType.warning,
                     );
                   },
                 ),

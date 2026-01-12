@@ -2,23 +2,32 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'widgets/health_gauge.dart';
+import 'widgets/oscilloscope_chart.dart';
+import 'widgets/spectrum_chart.dart';
 import '../../core/components/app_card.dart';
 import '../../core/components/app_button.dart';
 import '../../core/components/app_text.dart';
 import '../../theme/app_theme.dart';
+import 'providers/monitoring_providers.dart';
+import '../../data/models/diagnosis_log.dart';
+import '../history/providers/history_providers.dart';
+import '../../core/components/app_notification.dart';
 
 enum DiagnosisPhase { idle, measuring, analyzing, completed }
 
-class SpotDiagnosisScreen extends StatefulWidget {
+class SpotDiagnosisScreen extends ConsumerStatefulWidget {
   const SpotDiagnosisScreen({super.key});
 
   @override
-  State<SpotDiagnosisScreen> createState() => _SpotDiagnosisScreenState();
+  ConsumerState<SpotDiagnosisScreen> createState() =>
+      _SpotDiagnosisScreenState();
 }
 
-class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
+class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
+    with SingleTickerProviderStateMixin {
   DiagnosisPhase _phase = DiagnosisPhase.idle;
   int _countdown = 10;
   double? _lastScore;
@@ -27,11 +36,22 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
   String? _prescriptionDesc;
   String? _statusMessage;
 
+  // Tab controller for the 3 modes
+  late TabController _tabController;
+  final List<double> _liveBuffer = [];
+
   Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -45,6 +65,10 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
       _prescriptionDesc = null;
       _statusMessage = 'Collecting sensor data...';
     });
+
+    // Start Simulation via Riverpod if not auto-started
+    // The visual charts depend on the stream provider.
+    // We don't strictly need to "control" it here other than ensuring the provider is alive.
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
@@ -66,7 +90,6 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
       _statusMessage = 'AI Model Analyzing...';
     });
 
-    // Simulate 2 seconds of "Heavy" processing
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         _completeDiagnosis();
@@ -76,7 +99,6 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
 
   void _completeDiagnosis() async {
     final random = Random();
-    // 30% chance of 'Issue' (Caution or Danger) for demo variety
     final issueType = random.nextDouble();
 
     double score;
@@ -85,10 +107,8 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
     String pDesc;
 
     if (issueType < 0.15) {
-      // Danger (< 40)
       score = 20 + random.nextDouble() * 20;
       status = 'Danger';
-      // Dynamic Prescription Logic (Mock)
       if (random.nextBool()) {
         pTitle = 'Suspected Bearing Failure';
         pDesc =
@@ -99,14 +119,12 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
             'Harmonic peaks indicate shaft misalignment. Laser calibration required.';
       }
     } else if (issueType < 0.3) {
-      // Caution (40 - 80)
       score = 40 + random.nextDouble() * 35;
       status = 'Caution';
       pTitle = 'Lubrication Issue';
       pDesc =
           'Friction levels elevated. Scheduled greasing recommended within 48 hours.';
     } else {
-      // Normal (80 - 100)
       score = 75 + random.nextDouble() * 25;
       status = 'Normal';
       pTitle = 'Optimal Operation';
@@ -129,27 +147,65 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
       _statusMessage = 'Diagnosis Complete';
     });
 
-    // Save to Supabase (Best effort)
-    try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user != null) {
-        await Supabase.instance.client.from('diagnosis_logs').insert({
-          'user_id': user.id,
-          'score': score,
-          'status': status,
-          'rms_value': rms,
-          'peak_value': peak,
-          'frequency_hertz': freq,
-          'record_duration_sec': 10,
-          // 'prescription': '$pTitle: $pDesc' // If we added this column
-        });
-      }
-    } catch (e) {
-      debugPrint('Error saving log: $e');
-    }
+    // Switch to results tab automatically
+    _tabController.animateTo(0);
+
+    // Save to Supabase (Async)
+    _saveLog(score, status, rms, peak, freq);
 
     if (status == 'Danger' && mounted) {
       _showDangerDialog();
+    }
+  }
+
+  Future<void> _saveLog(
+    double score,
+    String status,
+    double rms,
+    double peak,
+    double freq,
+  ) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        debugPrint('User not logged in, cannot save log');
+        return;
+      }
+
+      print('Current User ID: ${user.id}');
+
+      final log = DiagnosisLog(
+        id: 0, // Generated by DB
+        userId: user.id,
+        score: score,
+        status: status,
+        metrics: {
+          'rms': rms,
+          'peak': peak,
+          'freq': freq,
+          'record_duration_sec': 10,
+        },
+        prescription: {
+          'title': _prescriptionTitle,
+          'description': _prescriptionDesc,
+        },
+        createdAt: DateTime.now(),
+      );
+
+      final repo = ref.read(diagnosisRepositoryProvider);
+      await repo.createLog(log);
+
+      // Refresh History UI
+      ref.invalidate(diagnosisHistoryProvider);
+    } catch (e) {
+      debugPrint('Error saving log: $e');
+      if (mounted) {
+        showAppNotification(
+          context,
+          'Failed to save diagnosis: $e',
+          type: NotificationType.error,
+        );
+      }
     }
   }
 
@@ -181,13 +237,12 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
             const AppText(
               'Abnormal patterns detected!',
               weight: FontWeight.bold,
-              size: AppTextSize.lg,
             ),
             const SizedBox(height: 8),
             AppText(_prescriptionTitle ?? 'Unknown Issue'),
             const SizedBox(height: 4),
             AppText(
-              _prescriptionDesc ?? ' Immediate inspection recommended.',
+              _prescriptionDesc ?? 'Immediate inspection recommended.',
               isMuted: true,
             ),
           ],
@@ -201,9 +256,7 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.statusRed,
             ),
-            onPressed: () {
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context),
             child: const Text('Contact Support'),
           ),
         ],
@@ -213,114 +266,126 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch the real-time stream
+    final streamAsync = ref.watch(sensorDataStreamProvider);
+
+    // Buffer logic mainly for the real-time tabs
+    streamAsync.whenData((chunk) {
+      if (_liveBuffer.length > 2048) {
+        _liveBuffer.removeRange(0, chunk.length);
+      }
+      _liveBuffer.addAll(chunk);
+    });
+
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const AppText(
-              'Spot Diagnosis',
-              size: AppTextSize.xl,
-              weight: FontWeight.bold,
-            ),
-            const AppText(
-              'Real-time instant equipment health check',
-              isMuted: true,
-            ),
-            const SizedBox(height: 32),
-
-            // Main Display Area
-            Center(
-              child: SizedBox(
-                height: 200,
-                width: 250,
-                child: _buildMainDisplay(context),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Metric Cards (Only show if completed)
-            if (_phase == DiagnosisPhase.completed) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: _MetricCard(
-                      label: 'RMS',
-                      value: '${_lastMetrics!['rms'].toStringAsFixed(2)} g',
-                      icon: LucideIcons.activity,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _MetricCard(
-                      label: 'Peak',
-                      value: '${_lastMetrics!['peak'].toStringAsFixed(2)} g',
-                      icon: Icons.bar_chart,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _MetricCard(
-                      label: 'Freq',
-                      value: '${_lastMetrics!['freq'].toStringAsFixed(0)} Hz',
-                      icon: LucideIcons.zap,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Prescription Card
-              _PrescriptionCard(
-                title: _prescriptionTitle ?? 'Analysis Result',
-                description:
-                    _prescriptionDesc ?? 'No specific action required.',
-                score: _lastScore ?? 0,
-              ),
-              const SizedBox(height: 32),
-            ],
-
-            // Controller
-            if (_phase == DiagnosisPhase.measuring ||
-                _phase == DiagnosisPhase.analyzing)
-              AppButton(
-                label: 'Stop Diagnosis',
-                variant: AppButtonVariant.outline,
-                icon: const Icon(LucideIcons.square),
-                onPressed: () {
-                  _timer?.cancel();
-                  setState(() => _phase = DiagnosisPhase.idle);
-                },
-              )
-            else
-              AppButton(
-                label: _phase == DiagnosisPhase.completed
-                    ? 'Start New Diagnosis'
-                    : 'Start Diagnosis',
-                variant: AppButtonVariant.primary,
-                icon: const Icon(LucideIcons.play),
-                onPressed: _startDiagnosis,
-              ),
-
-            if (_statusMessage != null &&
-                _phase != DiagnosisPhase.completed) ...[
-              const SizedBox(height: 16),
-              Center(
-                child: AppText(
-                  _statusMessage!,
-                  isMuted: true,
-                  color: _phase == DiagnosisPhase.analyzing
-                      ? AppTheme.accentNeonBlue
-                      : null,
-                ),
-              ),
-            ],
+      appBar: AppBar(
+        title: const AppText(
+          'Spot Diagnosis',
+          size: AppTextSize.xl,
+          weight: FontWeight.bold,
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        bottom: TabBar(
+          controller: _tabController,
+          dividerColor: Colors.transparent,
+          indicatorColor: AppTheme.primaryBlue,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white38,
+          tabs: const [
+            Tab(text: 'Diagnosis'),
+            Tab(text: 'Time-Domain'),
+            Tab(text: 'Frequency'),
           ],
         ),
       ),
+      backgroundColor: const Color(0xFF0F172A),
+      body: TabBarView(
+        controller: _tabController,
+        physics:
+            const NeverScrollableScrollPhysics(), // Prevent swipe to avoid conflict with chart gestures
+        children: [
+          // TAB 1: Diagnosis Result (Legacy + Enhanced)
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildPhaseController(),
+                const SizedBox(height: 24),
+                if (_phase == DiagnosisPhase.completed) _buildResultSection(),
+              ],
+            ),
+          ),
+
+          // TAB 2: Time Domain (Oscilloscope)
+          _buildChartTab(
+            title: 'Real-time Oscilloscope',
+            child: _liveBuffer.isNotEmpty
+                ? OscilloscopeChart(data: _liveBuffer)
+                : const Center(
+                    child: Text(
+                      'Waiting for data...',
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+          ),
+
+          // TAB 3: Frequency Domain (Spectrum)
+          _buildChartTab(
+            title: 'Frequency Spectrum (FFT)',
+            child: _liveBuffer.isNotEmpty
+                ? SpectrumChart(data: _liveBuffer, samplingRate: 1000)
+                : const Center(
+                    child: Text(
+                      'Waiting for data...',
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhaseController() {
+    return Column(
+      children: [
+        SizedBox(height: 220, child: Center(child: _buildMainDisplay(context))),
+        const SizedBox(height: 32),
+        if (_phase == DiagnosisPhase.measuring ||
+            _phase == DiagnosisPhase.analyzing)
+          AppButton(
+            label: 'Stop Diagnosis',
+            variant: AppButtonVariant.outline,
+            icon: const Icon(LucideIcons.square),
+            onPressed: () {
+              _timer?.cancel();
+              setState(() => _phase = DiagnosisPhase.idle);
+            },
+          )
+        else
+          AppButton(
+            label: _phase == DiagnosisPhase.completed
+                ? 'Start New Diagnosis'
+                : 'Start Diagnosis',
+            variant: AppButtonVariant.primary,
+            icon: const Icon(LucideIcons.play),
+            onPressed: _startDiagnosis,
+          ),
+
+        if (_statusMessage != null && _phase != DiagnosisPhase.completed) ...[
+          const SizedBox(height: 16),
+          AppText(
+            _statusMessage!,
+            isMuted: true,
+            color: _phase == DiagnosisPhase.analyzing
+                ? AppTheme.accentNeonBlue
+                : null,
+          ),
+        ],
+      ],
     );
   }
 
@@ -391,13 +456,106 @@ class _SpotDiagnosisScreenState extends State<SpotDiagnosisScreen> {
         );
     }
   }
+
+  Widget _buildResultSection() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _MetricCard(
+                label: 'RMS',
+                value: '${_lastMetrics!['rms'].toStringAsFixed(2)} g',
+                icon: LucideIcons.activity,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _MetricCard(
+                label: 'Peak',
+                value: '${_lastMetrics!['peak'].toStringAsFixed(2)} g',
+                icon: Icons.bar_chart,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _MetricCard(
+                label: 'Freq',
+                value: '${_lastMetrics!['freq'].toStringAsFixed(0)} Hz',
+                icon: LucideIcons.zap,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _PrescriptionCard(
+          title: _prescriptionTitle ?? 'Analysis Result',
+          description: _prescriptionDesc ?? 'No specific action required.',
+          score: _lastScore ?? 0,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChartTab({required String title, required Widget child}) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white10,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, color: Colors.white70, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.circle, color: Colors.greenAccent, size: 8),
+                const SizedBox(width: 4),
+                const Text(
+                  'LIVE',
+                  style: TextStyle(
+                    color: Colors.greenAccent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white10),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: child,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MetricCard extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
-
   const _MetricCard({
     required this.label,
     required this.value,
@@ -414,7 +572,7 @@ class _MetricCard extends StatelessWidget {
           const SizedBox(height: 8),
           AppText(value, size: AppTextSize.lg, weight: FontWeight.bold),
           const SizedBox(height: 4),
-          AppText(label, size: AppTextSize.sm, isMuted: true),
+          AppText(label, size: AppTextSize.xs, isMuted: true),
         ],
       ),
     );
@@ -425,7 +583,6 @@ class _PrescriptionCard extends StatelessWidget {
   final String title;
   final String description;
   final double score;
-
   const _PrescriptionCard({
     required this.title,
     required this.description,
@@ -434,19 +591,12 @@ class _PrescriptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color color;
-    IconData icon;
-
-    if (score < 40) {
-      color = AppTheme.statusRed;
-      icon = Icons.warning_amber_rounded;
-    } else if (score < 80) {
-      color = AppTheme.statusAmber;
-      icon = Icons.error_outline;
-    } else {
-      color = AppTheme.statusGreen;
-      icon = Icons.check_circle_outline;
-    }
+    Color color = score < 40
+        ? AppTheme.statusRed
+        : (score < 80 ? AppTheme.statusAmber : AppTheme.statusGreen);
+    IconData icon = score < 40
+        ? Icons.warning_amber_rounded
+        : (score < 80 ? Icons.error_outline : Icons.check_circle_outline);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -454,25 +604,11 @@ class _PrescriptionCard extends StatelessWidget {
         color: AppTheme.surfaceDark,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.1),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
+          Icon(icon, color: color, size: 24),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -481,13 +617,11 @@ class _PrescriptionCard extends StatelessWidget {
                 AppText(
                   'AI Prescription',
                   color: color,
-                  size: AppTextSize.sm,
+                  size: AppTextSize.xs,
                   weight: FontWeight.bold,
                 ),
                 const SizedBox(height: 4),
-                AppText(title, size: AppTextSize.lg, weight: FontWeight.bold),
-                const SizedBox(height: 8),
-                AppText(description, isMuted: true, size: AppTextSize.md),
+                AppText(description, isMuted: true, size: AppTextSize.sm),
               ],
             ),
           ),

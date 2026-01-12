@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/monitoring/spot_diagnosis_screen.dart';
+import '../../features/history/history_screen.dart';
 import '../../features/profile/my_page_screen.dart';
 
 // Simple state for navigation index - in a real app this might be connected to GoRouter
@@ -46,6 +47,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final pages = [
       const DashboardScreen(),
       const SpotDiagnosisScreen(),
+      const HistoryScreen(),
       const MyPageScreen(),
     ];
 
@@ -107,6 +109,11 @@ class _AppShellState extends ConsumerState<AppShell> {
                   label: Text('Monitoring'),
                 ),
                 NavigationRailDestination(
+                  icon: Icon(LucideIcons.history),
+                  selectedIcon: Icon(LucideIcons.history),
+                  label: Text('History'),
+                ),
+                NavigationRailDestination(
                   icon: Icon(LucideIcons.user),
                   selectedIcon: Icon(LucideIcons.user),
                   label: Text('My Page'),
@@ -138,6 +145,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                 NavigationDestination(
                   icon: Icon(LucideIcons.activity),
                   label: 'Monitoring',
+                ),
+                NavigationDestination(
+                  icon: Icon(LucideIcons.history),
+                  label: 'History',
                 ),
                 NavigationDestination(
                   icon: Icon(LucideIcons.user),

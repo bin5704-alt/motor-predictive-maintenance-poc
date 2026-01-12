@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/components/app_notification.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -33,21 +34,19 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     final name = _nameController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill in all required fields'),
-          backgroundColor: Colors.red,
-        ),
+      showAppNotification(
+        context,
+        'Please fill in all required fields',
+        type: NotificationType.warning,
       );
       return;
     }
 
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Passwords do not match'),
-          backgroundColor: Colors.red,
-        ),
+      showAppNotification(
+        context,
+        'Passwords do not match',
+        type: NotificationType.error,
       );
       return;
     }
@@ -66,28 +65,23 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created! Please login.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
+        showAppNotification(
+          context,
+          'Account created! Please login.',
+          type: NotificationType.success,
         );
         Navigator.of(context).pop(); // Return to Login
       }
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
-        );
+        showAppNotification(context, e.message, type: NotificationType.error);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Signup failed. Please try again.'),
-            backgroundColor: Colors.red,
-          ),
+        showAppNotification(
+          context,
+          'Signup failed. Please try again.',
+          type: NotificationType.error,
         );
       }
     } finally {

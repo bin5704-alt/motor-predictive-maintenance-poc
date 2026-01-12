@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../features/history/providers/history_providers.dart';
 import 'data/equipment_provider.dart';
 import 'data/equipment_model.dart';
 import '../../core/components/app_card.dart';
@@ -24,7 +25,8 @@ class DashboardScreen extends ConsumerWidget {
           _buildHeader(),
           const SizedBox(height: 24),
           equipmentAsync.when(
-            data: (equipmentList) => _buildStatsGrid(context, equipmentList),
+            data: (equipmentList) =>
+                _buildStatsGrid(context, equipmentList, ref),
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, stack) => Center(child: Text('Error: $err')),
           ),
@@ -63,18 +65,41 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatsGrid(BuildContext context, List<Equipment> items) {
+  Widget _buildStatsGrid(
+    BuildContext context,
+    List<Equipment> items,
+    WidgetRef ref,
+  ) {
+    // Watch real-time stats from diagnosis history
+    final statsAsync = ref.watch(dashboardStatsProvider);
+
     final isMobile = MediaQuery.of(context).size.width < 600;
 
-    final total = items.length;
-    final operational = items.where((e) => e.status == 'Operational').length;
-    final maintenance = items.where((e) => e.status == 'Maintenance').length;
-    final critical = items.where((e) => e.status == 'Critical').length;
+    // Default values if loading or error
+    var total = items.length;
+    var operational = items.where((e) => e.status == 'Operational').length;
+    var maintenance = items.where((e) => e.status == 'Maintenance').length;
+    var critical = items.where((e) => e.status == 'Critical').length;
+    var uptime = '0';
 
-    // Calculate uptime percentage (mock calculation based on operational count)
-    final uptime = total > 0
-        ? ((operational / total) * 100).toStringAsFixed(0)
-        : '0';
+    // Override with real stats if available
+    if (statsAsync.hasValue) {
+      final stats = statsAsync.value!;
+      // Total here is count of logs, which is different from count of equipment.
+      // Ideally we get 'Distinct Equipment Count'.
+      // For this requirement: "Aggregation of diagnosis_logs status values".
+      // We will show the aggregation of the LOGS status for the Dashboard Cards
+      // as strictly requested. The "Total Units" might stay as Equipment Count.
+
+      operational = stats['operational'] ?? 0;
+      maintenance = stats['maintenance'] ?? 0;
+      critical = stats['critical'] ?? 0;
+
+      final totalLogs = stats['total'] ?? 0;
+      if (totalLogs > 0) {
+        uptime = ((operational / totalLogs) * 100).toStringAsFixed(0);
+      }
+    }
 
     return Wrap(
       spacing: 16,
@@ -84,30 +109,37 @@ class DashboardScreen extends ConsumerWidget {
                 _buildStatCard(
                   'Total Units',
                   '$total',
-                  'All systems active',
+                  'Registered Assets',
                   LucideIcons.server,
                   Colors.blue,
                 ),
                 _buildStatCard(
                   'Operational',
                   '$operational',
-                  '$uptime% uptime',
+                  'Normal Status Logs',
                   LucideIcons.activity,
                   Colors.green,
                 ),
                 _buildStatCard(
                   'Maintenance',
                   '$maintenance',
-                  'Scheduled checkup',
+                  'Caution / Maint. Logs',
                   LucideIcons.wrench,
                   Colors.orange,
                 ),
                 _buildStatCard(
                   'Critical',
                   '$critical',
-                  'Action required',
+                  'Danger Status Logs',
                   LucideIcons.triangle_alert,
                   Colors.red,
+                ),
+                _buildStatCard(
+                  'Uptime',
+                  '$uptime%',
+                  'Operational Efficiency',
+                  LucideIcons.timer,
+                  Colors.blue,
                 ),
               ]
               .map(

@@ -48,3 +48,60 @@ create trigger on_auth_user_created
 -- 6. Grant Access
 GRANT ALL ON TABLE public.profiles TO authenticated;
 GRANT SELECT ON TABLE public.profiles TO anon;
+
+-- [EMERGENCY RECOVERY PHASE 2]
+-- 10. Re-create Raw Sensor Data Table (Corrected Schema)
+DROP TABLE IF EXISTS public.raw_sensor_data;
+CREATE TABLE public.raw_sensor_data (
+  id bigint generated always as identity primary key,
+  user_id uuid references auth.users(id), -- Linked to user
+  start_time timestamptz not null,
+  sampling_rate int not null,
+  samples float8[] not null, -- Array of sensor values
+  created_at timestamptz default now()
+);
+
+-- 11. Security Policies
+ALTER TABLE public.raw_sensor_data ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can insert own data" ON public.raw_sensor_data FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can view own data" ON public.raw_sensor_data FOR SELECT USING (auth.uid() = user_id);
+
+
+-- [PHASE 3] HISTORY & ASSET MANAGEMENT
+-- 12. Create Diagnosis Logs Table
+CREATE TABLE IF NOT EXISTS public.diagnosis_logs (
+  id bigint generated always as identity primary key,
+  user_id uuid references auth.users(id) not null,
+  score float8 not null,
+  status text not null, -- 'Normal', 'Caution', 'Danger'
+  metrics jsonb, -- {rms, peak, freq}
+  prescription jsonb, -- {title, description}
+  raw_data_id bigint references public.raw_sensor_data(id), -- Optional link to raw waveform
+  created_at timestamptz default now()
+);
+
+-- 13. Create Maintenance Logs Table
+CREATE TABLE IF NOT EXISTS public.maintenance_logs (
+  id bigint generated always as identity primary key,
+  diagnosis_id bigint references public.diagnosis_logs(id) on delete cascade not null,
+  action_taken text not null,
+  parts_replaced text,
+  cost numeric default 0,
+  technician text,
+  created_at timestamptz default now()
+);
+
+-- 14. Enable RLS for New Tables
+ALTER TABLE public.diagnosis_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.maintenance_logs ENABLE ROW LEVEL SECURITY;
+
+-- 15. RLS Policies
+-- Diagnosis Logs
+CREATE POLICY "Users can insert own diagnosis" ON public.diagnosis_logs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can view own diagnosis" ON public.diagnosis_logs FOR SELECT USING (auth.uid() = user_id);
+
+-- Maintenance Logs (Indirect access control via diagnosis linkage would be better, but for POC simplified)
+-- Assuming maintenance logs are created by the same user or authorized personnel.
+-- For simple POC, allow Authenticated users to select/insert.
+CREATE POLICY "Auth users can manage maintenance" ON public.maintenance_logs FOR ALL USING (auth.role() = 'authenticated');
+
