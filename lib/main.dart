@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Quantum Leap | PDMS',
+      title: 'Quantum Leap PDMS',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       // AuthGate handles the initial redirect based on session
