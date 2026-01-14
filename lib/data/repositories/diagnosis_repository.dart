@@ -10,7 +10,7 @@ class DiagnosisRepository {
 
   // --- Diagnosis Logs ---
 
-  Future<List<DiagnosisLog>> fetchHistory() async {
+  Future<List<DiagnosisLog>> fetchHistory({int? equipmentId}) async {
     try {
       final userId = _client.auth.currentUser?.id;
       if (userId == null) {
@@ -18,11 +18,17 @@ class DiagnosisRepository {
         return [];
       }
 
-      final response = await _client
-          .from('diagnosis_logs')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+      // Use the View for reading history to get local_index and equipment_name
+      var query = _client
+          .from('diagnosis_logs_view')
+          .select() // Select all fields from view
+          .eq('user_id', userId);
+
+      if (equipmentId != null) {
+        query = query.eq('equipment_id', equipmentId);
+      }
+
+      final response = await query.order('created_at', ascending: false);
 
       return (response as List).map((e) => DiagnosisLog.fromJson(e)).toList();
     } catch (e) {

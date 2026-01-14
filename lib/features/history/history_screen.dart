@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
-import 'package:intl/intl.dart';
+
 import '../../core/components/app_text.dart';
 import '../../core/components/app_notification.dart'; // Import AppNotification
 import '../../theme/app_theme.dart';
@@ -9,9 +9,11 @@ import '../../data/models/diagnosis_log.dart';
 import 'providers/history_providers.dart';
 import 'report_detail_screen.dart';
 import 'comparison_screen.dart';
+import 'widgets/diagnosis_history_card.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
-  const HistoryScreen({super.key});
+  final String? initialFilter;
+  const HistoryScreen({super.key, this.initialFilter});
 
   @override
   ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
@@ -20,13 +22,14 @@ class HistoryScreen extends ConsumerStatefulWidget {
 class _HistoryScreenState extends ConsumerState<HistoryScreen>
     with SingleTickerProviderStateMixin {
   String _searchQuery = '';
-  String _statusFilter = 'All'; // All, Normal, Caution, Danger
+  // Removed local _statusFilter
   final Set<int> _selectedIds = {};
   late AnimationController _refreshController;
 
   @override
   void initState() {
     super.initState();
+    // Filter is now managed by provider
     _refreshController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -105,6 +108,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
   @override
   Widget build(BuildContext context) {
     final historyAsync = ref.watch(diagnosisHistoryProvider);
+    final statusFilter = ref.watch(diagnosisFilterProvider);
     final isSelectionMode = _selectedIds.isNotEmpty;
 
     return Scaffold(
@@ -132,9 +136,14 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                         log.id.toString().contains(_searchQuery) ||
                         (log.status).toLowerCase().contains(
                           _searchQuery.toLowerCase(),
+                        ) ||
+                        (log.equipmentName ?? '').toLowerCase().contains(
+                          _searchQuery.toLowerCase(),
                         );
                     final matchesFilter =
-                        _statusFilter == 'All' || log.status == _statusFilter;
+                        statusFilter == 'All' ||
+                        (log.status).trim().toLowerCase() ==
+                            statusFilter.toLowerCase();
                     return matchesSearch && matchesFilter;
                   }).toList();
 
@@ -143,10 +152,13 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                       onRefresh: _handleRefresh,
                       child: ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        children: const [
-                          SizedBox(height: 100),
+                        children: [
+                          const SizedBox(height: 100),
                           Center(
-                            child: AppText('No history found.', isMuted: true),
+                            child: AppText(
+                              'No $statusFilter history found.',
+                              isMuted: true,
+                            ),
                           ),
                         ],
                       ),
@@ -161,7 +173,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                       itemBuilder: (context, index) {
                         final log = filteredLogs[index];
                         final isSelected = _selectedIds.contains(log.id);
-                        return _HistoryCard(
+                        return DiagnosisHistoryCard(
                           log: log,
                           isSelected: isSelected,
                           isSelectionMode: isSelectionMode,
@@ -269,7 +281,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
             scrollDirection: Axis.horizontal,
             child: Row(
               children: ['All', 'Normal', 'Caution', 'Danger'].map((status) {
-                final isSelected = _statusFilter == status;
+                final statusFilter = ref.watch(diagnosisFilterProvider);
+                final isSelected = statusFilter == status;
                 Color chipColor;
                 if (status == 'Normal') {
                   chipColor = AppTheme.statusGreen;
@@ -282,7 +295,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                 }
 
                 return GestureDetector(
-                  onTap: () => setState(() => _statusFilter = status),
+                  onTap: () => ref
+                      .read(diagnosisFilterProvider.notifier)
+                      .setFilter(status),
                   child: Container(
                     margin: const EdgeInsets.only(right: 8),
                     padding: const EdgeInsets.symmetric(
@@ -316,125 +331,4 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
   }
 }
 
-class _HistoryCard extends StatelessWidget {
-  final DiagnosisLog log;
-  final bool isSelected;
-  final bool isSelectionMode;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-
-  const _HistoryCard({
-    required this.log,
-    required this.isSelected,
-    required this.isSelectionMode,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Color statusColor;
-    IconData statusIcon;
-
-    switch (log.status) {
-      case 'Normal':
-        statusColor = AppTheme.statusGreen;
-        statusIcon = Icons.check_circle_outline;
-        break;
-      case 'Caution':
-        statusColor = AppTheme.statusAmber;
-        statusIcon = Icons.warning_amber_rounded;
-        break;
-      case 'Danger':
-        statusColor = AppTheme.statusRed;
-        statusIcon = Icons.error_outline;
-        break;
-      default:
-        statusColor = Colors.grey;
-        statusIcon = Icons.help_outline;
-    }
-
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.accentNeonBlue.withValues(alpha: 0.1)
-              : AppTheme.surfaceDark,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? AppTheme.accentNeonBlue : Colors.white10,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(statusIcon, color: statusColor, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppText(
-                    'Diagnosis #${log.id}',
-                    size: AppTextSize.md,
-                    weight: FontWeight.bold,
-                  ),
-                  const SizedBox(height: 4),
-                  AppText(
-                    log.status.toUpperCase(),
-                    color: statusColor,
-                    size: AppTextSize.xs,
-                    weight: FontWeight.bold,
-                  ),
-                  const SizedBox(height: 4),
-                  AppText(
-                    DateFormat('yyyy-MM-dd HH:mm').format(log.createdAt),
-                    color: Colors.white54,
-                    size: AppTextSize.xs,
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                AppText(
-                  log.score.toStringAsFixed(0),
-                  size: AppTextSize.xl,
-                  weight: FontWeight.bold,
-                  color: statusColor,
-                ),
-                const AppText('Score', size: AppTextSize.xs, isMuted: true),
-              ],
-            ),
-            const SizedBox(width: 8),
-            if (isSelectionMode)
-              Icon(
-                isSelected ? Icons.check_circle : Icons.circle_outlined,
-                color: isSelected ? AppTheme.accentNeonBlue : Colors.white24,
-                size: 24,
-              )
-            else
-              const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.white24,
-                size: 16,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// Removed _HistoryCard class

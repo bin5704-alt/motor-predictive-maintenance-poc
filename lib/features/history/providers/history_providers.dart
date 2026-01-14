@@ -3,6 +3,36 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/repositories/diagnosis_repository.dart';
 import '../../../data/models/diagnosis_log.dart';
 
+// App Navigation Provider
+final appNavigationProvider = NotifierProvider<NavigationIndexNotifier, int>(
+  NavigationIndexNotifier.new,
+);
+
+class NavigationIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void setIndex(int index) {
+    state = index;
+  }
+}
+
+// History Filter Provider
+// History Filter Provider
+final diagnosisFilterProvider =
+    NotifierProvider<DiagnosisFilterNotifier, String>(
+      DiagnosisFilterNotifier.new,
+    );
+
+class DiagnosisFilterNotifier extends Notifier<String> {
+  @override
+  String build() => 'All';
+
+  void setFilter(String filter) {
+    state = filter;
+  }
+}
+
 final diagnosisRepositoryProvider = Provider<DiagnosisRepository>((ref) {
   return DiagnosisRepository(Supabase.instance.client);
 });

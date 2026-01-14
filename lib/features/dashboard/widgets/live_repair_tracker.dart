@@ -12,132 +12,153 @@ class LiveRepairTracker extends ConsumerWidget {
   const LiveRepairTracker({super.key});
 
   @override
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeStateAsync = ref.watch(activeRepairProvider);
 
     return activeStateAsync.when(
       data: (activeState) {
-        // If no active repair, hide widget
-        if (activeState.shop == null) {
+        if (activeState.requests.isEmpty) {
           return const SizedBox.shrink();
         }
 
-        final shop = activeState.shop!;
-        final status = activeState.status;
-
-        return AppCard(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const RepairStatusDetailScreen(),
-              ),
-            );
-          },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Column(
+          children: activeState.requests.map((request) {
+            return AppCard(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        RepairStatusDetailScreen(request: request),
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: AppTheme.statusGreen,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.statusGreen.withValues(
-                                    alpha: 0.5,
-                                  ),
-                                  blurRadius: 6,
-                                  spreadRadius: 2,
+                          Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.statusGreen,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.statusGreen.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      blurRadius: 6,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(width: 8),
+                              const AppText(
+                                'Active Repair Request',
+                                size: AppTextSize.xs,
+                                isMuted: true,
+                                weight: FontWeight.w600,
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          const AppText(
-                            'Active Repair Request',
-                            size: AppTextSize.xs,
-                            isMuted: true,
-                            weight: FontWeight.w600,
+                          const SizedBox(height: 4),
+                          AppText(
+                            request.shopName,
+                            size: AppTextSize.lg,
+                            weight: FontWeight.bold,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      AppText(
-                        shop.name,
-                        size: AppTextSize.lg,
-                        weight: FontWeight.bold,
+                      const Icon(
+                        LucideIcons.activity,
+                        color: AppTheme.statusGreen,
                       ),
                     ],
                   ),
-                  const Icon(LucideIcons.activity, color: AppTheme.statusGreen),
-                ],
-              ),
 
-              const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-              // Stepper
-              Row(
-                children: [
-                  _buildStep(
-                    context,
-                    RepairStatus.pending,
-                    status,
-                    isFirst: true,
-                  ),
-                  _buildConnector(context, RepairStatus.pending, status),
-                  _buildStep(context, RepairStatus.quoted, status),
-                  _buildConnector(context, RepairStatus.quoted, status),
-                  _buildStep(context, RepairStatus.scheduled, status),
-                  _buildConnector(context, RepairStatus.scheduled, status),
-                  _buildStep(
-                    context,
-                    RepairStatus.completed,
-                    status,
-                    isLast: true,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // Dynamic Status Message
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.backgroundBlack,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      LucideIcons.info,
-                      size: 16,
-                      color: AppTheme.accentNeonBlue,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: AppText(
-                        _getStatusMessage(status, shop.name),
-                        size: AppTextSize.sm,
-                        color: Colors.white70,
+                  // Stepper
+                  Row(
+                    children: [
+                      _buildStep(
+                        context,
+                        RepairStatus.pending,
+                        request.status,
+                        isFirst: true,
                       ),
+                      _buildConnector(
+                        context,
+                        RepairStatus.pending,
+                        request.status,
+                      ),
+                      _buildStep(context, RepairStatus.quoted, request.status),
+                      _buildConnector(
+                        context,
+                        RepairStatus.quoted,
+                        request.status,
+                      ),
+                      _buildStep(
+                        context,
+                        RepairStatus.scheduled,
+                        request.status,
+                      ),
+                      _buildConnector(
+                        context,
+                        RepairStatus.scheduled,
+                        request.status,
+                      ),
+                      _buildStep(
+                        context,
+                        RepairStatus.completed,
+                        request.status,
+                        isLast: true,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Dynamic Status Message
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.backgroundBlack,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          LucideIcons.info,
+                          size: 16,
+                          color: AppTheme.accentNeonBlue,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: AppText(
+                            _getStatusMessage(request.status, request.shopName),
+                            size: AppTextSize.sm,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          }).toList(),
         );
       },
       loading: () => const SizedBox.shrink(),

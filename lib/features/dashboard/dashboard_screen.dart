@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/history/providers/history_providers.dart';
 import '../../data/models/asset.dart'; // Import Asset model
 import 'data/equipment_model.dart';
+
 import '../../core/components/app_card.dart';
 import '../../core/components/app_text.dart';
 import '../../core/components/app_button.dart';
@@ -136,6 +137,7 @@ class DashboardScreen extends ConsumerWidget {
                   'Normal Status Logs',
                   LucideIcons.activity,
                   Colors.green,
+                  onTap: () => _navigateToHistory(ref, 'Normal'),
                 ),
                 _buildStatCard(
                   'Maintenance',
@@ -143,6 +145,7 @@ class DashboardScreen extends ConsumerWidget {
                   'Caution / Maint. Logs',
                   LucideIcons.wrench,
                   Colors.orange,
+                  onTap: () => _navigateToHistory(ref, 'Caution'),
                 ),
                 _buildStatCard(
                   'Critical',
@@ -150,6 +153,7 @@ class DashboardScreen extends ConsumerWidget {
                   'Danger Status Logs',
                   LucideIcons.triangle_alert,
                   Colors.red,
+                  onTap: () => _navigateToHistory(ref, 'Danger'),
                 ),
                 _buildStatCard(
                   'Uptime',
@@ -174,33 +178,49 @@ class DashboardScreen extends ConsumerWidget {
     String value,
     String subtext,
     IconData icon,
-    Color color,
-  ) {
+    Color color, {
+    VoidCallback? onTap,
+  }) {
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0), // Padding moved inside InkWell
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AppText(title, isMuted: true, size: AppTextSize.sm),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  AppText(title, isMuted: true, size: AppTextSize.sm),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon, color: color, size: 18),
+                  ),
+                ],
               ),
+              const SizedBox(height: 12),
+              AppText(value, size: AppTextSize.xxl, weight: FontWeight.bold),
+              const SizedBox(height: 4),
+              AppText(subtext, size: AppTextSize.xs, color: color),
             ],
           ),
-          const SizedBox(height: 12),
-          AppText(value, size: AppTextSize.xxl, weight: FontWeight.bold),
-          const SizedBox(height: 4),
-          AppText(subtext, size: AppTextSize.xs, color: color),
-        ],
+        ),
       ),
     );
+  }
+
+  void _navigateToHistory(WidgetRef ref, String filter) {
+    // 1. Set the filter
+    ref.read(diagnosisFilterProvider.notifier).setFilter(filter);
+
+    // 2. Switch to History Tab (Index 2)
+    ref.read(appNavigationProvider.notifier).setIndex(2);
   }
 
   Widget _buildMainSection(BuildContext context, List<Asset> assets) {

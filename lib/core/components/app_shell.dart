@@ -9,20 +9,6 @@ import '../../features/profile/my_page_screen.dart';
 import '../../features/history/providers/history_providers.dart'; // Import providers
 import '../../data/repositories/asset_repository.dart'; // Import asset repository
 
-// Simple state for navigation index - in a real app this might be connected to GoRouter
-final _navigationIndexProvider = NotifierProvider<NavigationIndexNotifier, int>(
-  NavigationIndexNotifier.new,
-);
-
-class NavigationIndexNotifier extends Notifier<int> {
-  @override
-  int build() => 0;
-
-  void setIndex(int index) {
-    state = index;
-  }
-}
-
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
@@ -44,7 +30,7 @@ class _AppShellState extends ConsumerState<AppShell>
 
     // Reset navigation to Dashboard (index 0) whenever AppShell is mounted (Login success)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(_navigationIndexProvider.notifier).setIndex(0);
+      ref.read(appNavigationProvider.notifier).setIndex(0);
     });
   }
 
@@ -85,7 +71,7 @@ class _AppShellState extends ConsumerState<AppShell>
 
   @override
   Widget build(BuildContext context) {
-    final navIndex = ref.watch(_navigationIndexProvider);
+    final navIndex = ref.watch(appNavigationProvider);
     final isDesktop = MediaQuery.of(context).size.width > 800;
 
     final pages = [
@@ -152,7 +138,7 @@ class _AppShellState extends ConsumerState<AppShell>
             NavigationRail(
               selectedIndex: navIndex,
               onDestinationSelected: (index) {
-                ref.read(_navigationIndexProvider.notifier).setIndex(index);
+                ref.read(appNavigationProvider.notifier).setIndex(index);
               },
               extended: MediaQuery.of(context).size.width > 1200,
               minExtendedWidth: 200,
@@ -195,7 +181,7 @@ class _AppShellState extends ConsumerState<AppShell>
           : NavigationBar(
               selectedIndex: navIndex,
               onDestinationSelected: (index) {
-                ref.read(_navigationIndexProvider.notifier).setIndex(index);
+                ref.read(appNavigationProvider.notifier).setIndex(index);
               },
               destinations: const [
                 NavigationDestination(

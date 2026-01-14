@@ -102,31 +102,47 @@ class RepairShopDetailSheet extends StatelessWidget {
                 height: 56,
                 child: Consumer(
                   builder: (context, ref, child) {
+                    final activeState = ref
+                        .watch(activeRepairProvider)
+                        .asData
+                        ?.value;
+                    final isAlreadyRequested =
+                        activeState?.requests.any(
+                          (r) => r.shopId == shop.id.toString(),
+                        ) ??
+                        false;
+
                     return ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.accentNeonBlue,
+                        backgroundColor: isAlreadyRequested
+                            ? AppTheme.surfaceDark
+                            : AppTheme.accentNeonBlue,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         elevation: 4,
                       ),
-                      onPressed: () {
-                        // Trigger Active Repair State
-                        ref
-                            .read(activeRepairProvider.notifier)
-                            .createRequest(shop);
+                      onPressed: isAlreadyRequested
+                          ? null
+                          : () {
+                              // Trigger Active Repair State
+                              ref
+                                  .read(activeRepairProvider.notifier)
+                                  .createRequest(shop);
 
-                        Navigator.pop(context);
-                        showAppNotification(
-                          context,
-                          'Quote request sent to ${shop.name}!',
-                          type: NotificationType.success,
-                        );
-                      },
-                      child: const Text(
-                        'Request Quote',
+                              Navigator.pop(context);
+                              showAppNotification(
+                                context,
+                                'Quote request sent to ${shop.name}!',
+                                type: NotificationType.success,
+                              );
+                            },
+                      child: Text(
+                        isAlreadyRequested ? 'Request Sent' : 'Request Quote',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: isAlreadyRequested
+                              ? Colors.white38
+                              : Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),

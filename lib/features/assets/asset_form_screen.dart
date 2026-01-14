@@ -3,10 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/components/app_text.dart';
 import '../../core/components/app_button.dart';
+import '../../core/components/app_card.dart';
 import '../../core/components/app_notification.dart';
 import '../../theme/app_theme.dart';
 import '../../data/models/asset.dart';
 import '../../data/repositories/asset_repository.dart';
+// History Imports
+import '../../features/history/providers/history_providers.dart';
+import '../../features/history/widgets/diagnosis_history_card.dart';
+
+import '../../features/history/report_detail_screen.dart';
 
 class AssetFormScreen extends ConsumerStatefulWidget {
   final Asset? asset; // Optional asset for editing
@@ -205,10 +211,75 @@ class _AssetFormScreenState extends ConsumerState<AssetFormScreen> {
                 variant: AppButtonVariant.primary,
                 fullWidth: true,
               ),
+
+              if (isEditing) ...[
+                const SizedBox(height: 48),
+                const Divider(color: Colors.white10),
+                const SizedBox(height: 24),
+                _buildHistorySection(context, ref),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHistorySection(BuildContext context, WidgetRef ref) {
+    // Client-side filtering for simplicity as per plan
+    final historyAsync = ref.watch(diagnosisHistoryProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Maintenance History'),
+        const SizedBox(height: 16),
+        historyAsync.when(
+          data: (logs) {
+            // Filter logs for this asset
+            final relevantLogs = logs
+                .where((log) => log.equipmentId == widget.asset!.id)
+                .toList();
+
+            if (relevantLogs.isEmpty) {
+              return const AppCard(
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: AppText(
+                      'No diagnosis history recorded for this asset.',
+                      isMuted: true,
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: relevantLogs.length,
+              itemBuilder: (context, index) {
+                final log = relevantLogs[index];
+                return DiagnosisHistoryCard(
+                  log: log,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ReportDetailScreen(diagnosisId: log.id),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) =>
+              AppText('Error history: $e', color: AppTheme.statusRed),
+        ),
+      ],
     );
   }
 

@@ -7,165 +7,141 @@ import 'package:ai_poc_monitoring_app/core/components/app_card.dart';
 import 'package:ai_poc_monitoring_app/core/components/app_button.dart';
 import 'package:ai_poc_monitoring_app/features/maintenance/providers/active_repair_provider.dart';
 import 'package:ai_poc_monitoring_app/features/maintenance/models/repair_status.dart';
+import 'package:ai_poc_monitoring_app/features/maintenance/models/repair_request.dart';
 
 class RepairStatusDetailScreen extends ConsumerWidget {
-  const RepairStatusDetailScreen({super.key});
+  final RepairRequest request;
+
+  const RepairStatusDetailScreen({super.key, required this.request});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activeStateAsync = ref.watch(activeRepairProvider);
-
-    return activeStateAsync.when(
-      data: (activeState) {
-        final shop = activeState.shop;
-
-        if (shop == null) {
-          return const Scaffold(
-            body: Center(child: Text('No active repair request found.')),
-          );
-        }
-
-        return Scaffold(
-          backgroundColor: AppTheme.backgroundBlack,
-          appBar: AppBar(
-            title: const Text('Repair Request Status'),
-            backgroundColor: AppTheme.backgroundBlack,
-            foregroundColor: Colors.white,
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Shop Summary Card
-                AppCard(
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundImage: NetworkImage(shop.imageUrl),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundBlack,
+      appBar: AppBar(
+        title: const Text('Repair Request Status'),
+        backgroundColor: AppTheme.backgroundBlack,
+        foregroundColor: Colors.white,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Shop Summary Card
+            AppCard(
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundImage: NetworkImage(request.shopImageUrl),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppText(
+                          request.shopName,
+                          size: AppTextSize.lg,
+                          weight: FontWeight.bold,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
                           children: [
-                            AppText(
-                              shop.name,
-                              size: AppTextSize.lg,
-                              weight: FontWeight.bold,
+                            const Icon(
+                              LucideIcons.phone,
+                              size: 14,
+                              color: Colors.white70,
                             ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                const Icon(
-                                  LucideIcons.phone,
-                                  size: 14,
-                                  color: Colors.white70,
-                                ),
-                                const SizedBox(width: 4),
-                                const AppText(
-                                  '0507-1234-5678',
-                                  size: AppTextSize.sm,
-                                  isMuted: true,
-                                ),
-                              ],
+                            const SizedBox(width: 4),
+                            const AppText(
+                              '0507-1234-5678', // Placeholder
+                              size: AppTextSize.sm,
+                              isMuted: true,
                             ),
                           ],
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          LucideIcons.phone_call,
-                          color: AppTheme.statusGreen,
-                        ),
-                        onPressed: () {
-                          // Call functionality placeholder
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                const AppText(
-                  'Status Timeline',
-                  size: AppTextSize.xl,
-                  weight: FontWeight.bold,
-                ),
-                const SizedBox(height: 16),
-
-                // Vertical Timeline
-                _buildTimelineItem(
-                  context,
-                  RepairStatus.pending,
-                  activeState.status,
-                  title: 'Request Received',
-                  time: '10:30 AM',
-                  desc: 'Request sent to shop.',
-                  isFirst: true,
-                ),
-                _buildTimelineItem(
-                  context,
-                  RepairStatus.quoted,
-                  activeState.status,
-                  title: 'Quote Sent',
-                  time: '11:15 AM',
-                  desc: 'Est. Cost: ₩80,000\nVisit Fee: Included',
-                ),
-                _buildTimelineItem(
-                  context,
-                  RepairStatus.scheduled,
-                  activeState.status,
-                  title: 'Technician Scheduled',
-                  time: 'Pending',
-                  desc: 'Visit scheduled for 14:00 Today',
-                ),
-                _buildTimelineItem(
-                  context,
-                  RepairStatus.completed,
-                  activeState.status,
-                  title: 'Work Completed',
-                  time: '-',
-                  desc: 'Repair finished & verified.',
-                  isLast: true,
-                ),
-
-                const SizedBox(height: 48),
-
-                // Cancel Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: AppButton(
-                    label: 'Cancel Request',
-                    variant: AppButtonVariant.outline,
-                    icon: const Icon(
-                      LucideIcons.trash_2,
-                      size: 18,
-                      color: AppTheme.statusRed,
+                      ],
                     ),
-                    textColor: AppTheme.statusRed,
-                    borderColor: AppTheme.statusRed,
-                    onPressed: () => _showCancelDialog(context, ref),
                   ),
-                ),
-              ],
+                  IconButton(
+                    icon: const Icon(
+                      LucideIcons.phone_call,
+                      color: AppTheme.statusGreen,
+                    ),
+                    onPressed: () {
+                      // Call functionality placeholder
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-        ); // Scaffold
-      },
-      loading: () => const Scaffold(
-        backgroundColor: AppTheme.backgroundBlack,
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (err, stack) => Scaffold(
-        backgroundColor: AppTheme.backgroundBlack,
-        body: Center(
-          child: Text(
-            'Error: $err',
-            style: const TextStyle(color: Colors.white),
-          ),
+            const SizedBox(height: 32),
+
+            const AppText(
+              'Status Timeline',
+              size: AppTextSize.xl,
+              weight: FontWeight.bold,
+            ),
+            const SizedBox(height: 16),
+
+            // Vertical Timeline
+            _buildTimelineItem(
+              context,
+              RepairStatus.pending,
+              request.status,
+              title: 'Request Received',
+              time: '10:30 AM',
+              desc: 'Request sent to shop.',
+              isFirst: true,
+            ),
+            _buildTimelineItem(
+              context,
+              RepairStatus.quoted,
+              request.status,
+              title: 'Quote Sent',
+              time: '11:15 AM',
+              desc: 'Est. Cost: ₩80,000\nVisit Fee: Included',
+            ),
+            _buildTimelineItem(
+              context,
+              RepairStatus.scheduled,
+              request.status,
+              title: 'Technician Scheduled',
+              time: 'Pending',
+              desc: 'Visit scheduled for 14:00 Today',
+            ),
+            _buildTimelineItem(
+              context,
+              RepairStatus.completed,
+              request.status,
+              title: 'Work Completed',
+              time: '-',
+              desc: 'Repair finished & verified.',
+              isLast: true,
+            ),
+
+            const SizedBox(height: 48),
+
+            // Cancel Button
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: AppButton(
+                label: 'Cancel Request',
+                variant: AppButtonVariant.outline,
+                icon: const Icon(
+                  LucideIcons.trash_2,
+                  size: 18,
+                  color: AppTheme.statusRed,
+                ),
+                textColor: AppTheme.statusRed,
+                borderColor: AppTheme.statusRed,
+                onPressed: () => _showCancelDialog(context, ref),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -281,7 +257,7 @@ class RepairStatusDetailScreen extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () {
-              ref.read(activeRepairProvider.notifier).clear();
+              ref.read(activeRepairProvider.notifier).cancelRequest(request.id);
               Navigator.pop(context); // Close dialog
               Navigator.pop(context); // Close detail screen
             },

@@ -5,71 +5,28 @@ import 'package:ai_poc_monitoring_app/features/maintenance/models/repair_status.
 import 'package:ai_poc_monitoring_app/features/maintenance/data/repair_request_repository.dart';
 import 'package:ai_poc_monitoring_app/features/maintenance/models/repair_request.dart';
 
+// Now holds a LIST of active requests
 class ActiveRepairState {
-  final RepairShop? shop;
-  final RepairStatus status;
-  final DateTime? lastUpdated;
+  final List<RepairRequest> requests;
 
-  const ActiveRepairState({
-    this.shop,
-    this.status = RepairStatus.pending,
-    this.lastUpdated,
-  });
-
-  ActiveRepairState copyWith({
-    RepairShop? shop,
-    RepairStatus? status,
-    DateTime? lastUpdated,
-  }) {
-    return ActiveRepairState(
-      shop: shop ?? this.shop,
-      status: status ?? this.status,
-      lastUpdated: lastUpdated ?? this.lastUpdated,
-    );
-  }
+  const ActiveRepairState({this.requests = const []});
 }
 
 class ActiveRepairNotifier extends AsyncNotifier<ActiveRepairState> {
   @override
   Future<ActiveRepairState> build() async {
-    // Load from Supabase (or fallback)
     final repo = ref.read(repairRequestRepositoryProvider);
     try {
-      final request = await repo.fetchActiveRequest();
-
-      if (request != null) {
-        // Reconstruct shop from stored data
-        final shop = RepairShop(
-          id: int.tryParse(request.shopId) ?? 0,
-          name: request.shopName,
-          imageUrl: request.shopImageUrl,
-          // Default data for UI
-          location: '',
-          distanceKm: 0,
-          rating: 0,
-          reviewCount: 0,
-          specializations: [],
-          equipment: [],
-          reviews: [],
-          isPremium: false,
-        );
-
-        return ActiveRepairState(
-          shop: shop,
-          status: request.status,
-          lastUpdated: request.updatedAt,
-        );
-      }
+      final requests = await repo.fetchActiveRequests();
+      return ActiveRepairState(requests: requests);
     } catch (e) {
-      // If error in provider build, we return empty state rather than crashing UI
-      // But repo handles error catching mostly.
       debugPrint('ActiveRepairProvider Error: $e');
     }
-
     return const ActiveRepairState();
   }
 
   Future<void> createRequest(RepairShop shop) async {
+    // Optimistic update or reload? Reload is safer for ID sync.
     state = const AsyncValue.loading();
 
     try {
@@ -88,24 +45,27 @@ class ActiveRepairNotifier extends AsyncNotifier<ActiveRepairState> {
 
       await repo.createRequest(newRequest);
 
-      state = AsyncValue.data(
-        ActiveRepairState(
-          shop: shop,
-          status: RepairStatus.pending,
-          lastUpdated: DateTime.now(),
-        ),
-      );
+      // Refresh to get the real ID from DB
+      ref.invalidateSelf();
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
-  Future<void> clear() async {
-    state = const AsyncValue.loading();
+  Future<void> cancelRequest(String id) async {
+    // state = const AsyncValue.loading(); // Don't block UI entirely if possible
     try {
       final repo = ref.read(repairRequestRepositoryProvider);
-      await repo.deleteActiveRequest();
-      state = const AsyncValue.data(ActiveRepairState());
+      await repo.deleteRequest(id);
+
+      // Optimistic removal
+      if (state.hasValue) {
+        final current = state.value!.requests;
+        final updated = current.where((r) => r.id != id).toList();
+        state = AsyncValue.data(ActiveRepairState(requests: updated));
+      } else {
+        ref.invalidateSelf();
+      }
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
