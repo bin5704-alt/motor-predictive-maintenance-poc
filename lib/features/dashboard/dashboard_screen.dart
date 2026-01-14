@@ -2,20 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/history/providers/history_providers.dart';
-import 'data/equipment_provider.dart';
+import '../../data/models/asset.dart'; // Import Asset model
 import 'data/equipment_model.dart';
 import '../../core/components/app_card.dart';
 import '../../core/components/app_text.dart';
 import '../../core/components/app_button.dart';
-import '../equipment/add_equipment_screen.dart';
+import '../../features/assets/asset_form_screen.dart';
+
+import '../../data/repositories/asset_repository.dart';
 import 'widgets/equipment_card.dart';
+import 'widgets/live_repair_tracker.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final equipmentAsync = ref.watch(equipmentProvider);
+    // Phase 4: Use Asset List instead of Mock Equipment
+    final assetsAsync = ref.watch(assetListProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
@@ -24,14 +28,33 @@ class DashboardScreen extends ConsumerWidget {
         children: [
           _buildHeader(),
           const SizedBox(height: 24),
-          equipmentAsync.when(
-            data: (equipmentList) =>
-                _buildStatsGrid(context, equipmentList, ref),
+          // Phase 7: Live Repair Tracker
+          const LiveRepairTracker(),
+          const SizedBox(height: 24),
+          assetsAsync.when(
+            data: (assets) {
+              // Map Assets to UI Equipment Model for compatibility
+              final equipmentList = assets.map((asset) {
+                return Equipment(
+                  id: asset.id,
+                  name: asset.name,
+                  status: 'Operational', // Default for now
+                  efficiency: 98.0, // Default for now
+                  lastUpdated: asset.createdAt,
+                );
+              }).toList();
+
+              return Column(
+                children: [
+                  _buildStatsGrid(context, equipmentList, ref),
+                  const SizedBox(height: 24),
+                  _buildMainSection(context, assets), // Pass assets directly
+                ],
+              );
+            },
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, stack) => Center(child: Text('Error: $err')),
           ),
-          const SizedBox(height: 24),
-          _buildMainSection(context, equipmentAsync.asData?.value ?? []),
         ],
       ),
     );
@@ -85,12 +108,6 @@ class DashboardScreen extends ConsumerWidget {
     // Override with real stats if available
     if (statsAsync.hasValue) {
       final stats = statsAsync.value!;
-      // Total here is count of logs, which is different from count of equipment.
-      // Ideally we get 'Distinct Equipment Count'.
-      // For this requirement: "Aggregation of diagnosis_logs status values".
-      // We will show the aggregation of the LOGS status for the Dashboard Cards
-      // as strictly requested. The "Total Units" might stay as Equipment Count.
-
       operational = stats['operational'] ?? 0;
       maintenance = stats['maintenance'] ?? 0;
       critical = stats['critical'] ?? 0;
@@ -186,14 +203,11 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMainSection(BuildContext context, List<Equipment> items) {
-    // Show only active alerts (Critical status)
-    final criticalItems = items.where((e) => e.status == 'Critical').toList();
-
+  Widget _buildMainSection(BuildContext context, List<Asset> assets) {
+    // Changed to List<Asset>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Registered Equipment Section
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -209,7 +223,7 @@ class DashboardScreen extends ConsumerWidget {
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const AddEquipmentScreen(),
+                    builder: (context) => const AssetFormScreen(),
                   ),
                 );
               },
@@ -217,7 +231,7 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 16),
-        if (items.isEmpty)
+        if (assets.isEmpty)
           Padding(
             padding: const EdgeInsets.all(32.0),
             child: Center(
@@ -240,119 +254,33 @@ class DashboardScreen extends ConsumerWidget {
                   : (MediaQuery.of(context).size.width > 800 ? 2 : 1),
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              childAspectRatio: 1.8, // Adjust based on card content
+              childAspectRatio: 1.8,
             ),
-            itemCount: items.length,
+            itemCount: assets.length,
             itemBuilder: (context, index) {
+              final asset = assets[index];
+              // Map to Equipment for UI
+              final equipment = Equipment(
+                id: asset.id,
+                name: asset.name,
+                status: 'Operational', // Default
+                efficiency: 98.0, // Default
+                lastUpdated: asset.createdAt,
+              );
+
               return EquipmentCard(
-                equipment: items[index],
+                equipment: equipment,
                 onTap: () {
-                  // Navigate to details
+                  // Navigate to Edit Screen
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => AssetFormScreen(asset: asset),
+                    ),
+                  );
                 },
               );
             },
           ),
-
-        const SizedBox(height: 32),
-
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 2,
-              child: AppCard(
-                height: 400,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const AppText(
-                      'Efficiency Trends',
-                      size: AppTextSize.lg,
-                      weight: FontWeight.w600,
-                    ),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: Center(
-                        child: AppText(
-                          'Chart Placeholder (ApexCharts/FlChart)',
-                          isMuted: true,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (MediaQuery.of(context).size.width > 900) ...[
-              const SizedBox(width: 24),
-              Expanded(
-                flex: 1,
-                child: AppCard(
-                  height: 400,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const AppText(
-                        'Recent Alerts',
-                        size: AppTextSize.lg,
-                        weight: FontWeight.w600,
-                      ),
-                      const SizedBox(height: 20),
-                      Expanded(
-                        child: criticalItems.isEmpty
-                            ? Center(
-                                child: AppText(
-                                  'No critical alerts',
-                                  isMuted: true,
-                                ),
-                              )
-                            : ListView.separated(
-                                itemCount: criticalItems.length,
-                                separatorBuilder: (_, _) =>
-                                    const Divider(height: 24),
-                                itemBuilder: (context, index) {
-                                  final item = criticalItems[index];
-                                  return Row(
-                                    children: [
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.red,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            AppText(
-                                              '${item.name} status is ${item.status}',
-                                              size: AppTextSize.sm,
-                                              weight: FontWeight.w500,
-                                            ),
-                                            AppText(
-                                              'Efficiency: ${item.efficiency}%',
-                                              size: AppTextSize.xs,
-                                              isMuted: true,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
       ],
     );
   }

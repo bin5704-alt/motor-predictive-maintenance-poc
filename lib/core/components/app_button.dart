@@ -8,6 +8,8 @@ class AppButton extends StatelessWidget {
   final Widget? icon;
   final AppButtonVariant variant;
   final bool fullWidth;
+  final Color? textColor;
+  final Color? borderColor;
 
   const AppButton({
     super.key,
@@ -16,6 +18,8 @@ class AppButton extends StatelessWidget {
     this.icon,
     this.variant = AppButtonVariant.primary,
     this.fullWidth = false,
+    this.textColor,
+    this.borderColor,
   });
 
   @override
@@ -62,8 +66,8 @@ class AppButton extends StatelessWidget {
           icon: icon ?? const SizedBox.shrink(),
           label: Text(label),
           style: OutlinedButton.styleFrom(
-            foregroundColor: theme.colorScheme.primary,
-            side: BorderSide(color: theme.dividerColor),
+            foregroundColor: textColor ?? theme.colorScheme.primary,
+            side: BorderSide(color: borderColor ?? theme.dividerColor),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -73,8 +77,8 @@ class AppButton extends StatelessWidget {
           button = OutlinedButton(
             onPressed: onPressed,
             style: OutlinedButton.styleFrom(
-              foregroundColor: theme.colorScheme.primary,
-              side: BorderSide(color: theme.dividerColor),
+              foregroundColor: textColor ?? theme.colorScheme.primary,
+              side: BorderSide(color: borderColor ?? theme.dividerColor),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),

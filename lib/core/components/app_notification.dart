@@ -149,7 +149,7 @@ class _TopNotificationState extends State<_TopNotification>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: _getBackgroundColor().withOpacity(0.1),
+                      color: _getBackgroundColor().withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(

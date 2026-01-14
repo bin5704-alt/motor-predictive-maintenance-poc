@@ -1,0 +1,26 @@
+﻿Analyzing ai_poc_monitoring_app...                              
+
+   info - 'Share' is deprecated and shouldn't be used. Use SharePlus instead - lib\data\services\export_service.dart:11:11 - deprecated_member_use
+   info - 'share' is deprecated and shouldn't be used. Use SharePlus.instance.share() instead - lib\data\services\export_service.dart:11:17 - deprecated_member_use
+   info - 'Share' is deprecated and shouldn't be used. Use SharePlus instead - lib\data\services\export_service.dart:34:13 - deprecated_member_use
+   info - 'shareXFiles' is deprecated and shouldn't be used. Use SharePlus.instance.share() instead - lib\data\services\export_service.dart:34:19 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\dashboard\widgets\live_repair_tracker.dart:57:63 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\dashboard\widgets\live_repair_tracker.dart:173:56 - deprecated_member_use
+   info - 'Share' is deprecated and shouldn't be used. Use SharePlus instead - lib\features\history\comparison_screen.dart:83:15 - deprecated_member_use
+   info - 'shareXFiles' is deprecated and shouldn't be used. Use SharePlus.instance.share() instead - lib\features\history\comparison_screen.dart:83:21 - deprecated_member_use
+   info - 'Share' is deprecated and shouldn't be used. Use SharePlus instead - lib\features\history\comparison_screen.dart:99:15 - deprecated_member_use
+   info - 'shareXFiles' is deprecated and shouldn't be used. Use SharePlus.instance.share() instead - lib\features\history\comparison_screen.dart:99:21 - deprecated_member_use
+   info - 'Share' is deprecated and shouldn't be used. Use SharePlus instead - lib\features\history\report_detail_screen.dart:80:15 - deprecated_member_use
+   info - 'shareXFiles' is deprecated and shouldn't be used. Use SharePlus.instance.share() instead - lib\features\history\report_detail_screen.dart:80:21 - deprecated_member_use
+   info - 'Share' is deprecated and shouldn't be used. Use SharePlus instead - lib\features\history\report_detail_screen.dart:89:15 - deprecated_member_use
+   info - 'shareXFiles' is deprecated and shouldn't be used. Use SharePlus.instance.share() instead - lib\features\history\report_detail_screen.dart:89:21 - deprecated_member_use
+   info - Don't invoke 'print' in production code - lib\features\maintenance\providers\active_repair_provider.dart:65:7 - avoid_print
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\maintenance\ui\repair_shop_list_screen.dart:195:64 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\features\maintenance\ui\repair_shop_list_screen.dart:255:41 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\maintenance\ui\widgets\repair_shop_card.dart:53:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\maintenance\ui\widgets\repair_shop_card.dart:73:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\maintenance\ui\widgets\repair_shop_card.dart:110:58 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\maintenance\ui\widgets\repair_shop_detail_sheet.dart:94:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\maintenance\ui\widgets\repair_shop_detail_sheet.dart:167:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\maintenance\ui\widgets\repair_shop_detail_sheet.dart:472:59 - deprecated_member_use
+

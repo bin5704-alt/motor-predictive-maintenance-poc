@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/diagnosis_log.dart';
 import '../models/maintenance_log.dart';
+import 'package:flutter/foundation.dart';
 
 class DiagnosisRepository {
   final SupabaseClient _client;
@@ -13,7 +14,7 @@ class DiagnosisRepository {
     try {
       final userId = _client.auth.currentUser?.id;
       if (userId == null) {
-        print('fetchHistory: User ID is null');
+        debugPrint('fetchHistory: User ID is null');
         return [];
       }
 
@@ -25,14 +26,14 @@ class DiagnosisRepository {
 
       return (response as List).map((e) => DiagnosisLog.fromJson(e)).toList();
     } catch (e) {
-      print('fetchHistory Error: $e');
+      debugPrint('fetchHistory Error: $e');
       rethrow; // Pass to Provider to handle error state
     }
   }
 
   Future<DiagnosisLog?> createLog(DiagnosisLog log) async {
-    print('Starting createLog...');
-    print('Log Data to Insert: ${log.toJson()}');
+    debugPrint('Starting createLog...');
+    debugPrint('Log Data to Insert: ${log.toJson()}');
 
     try {
       final response = await _client
@@ -41,10 +42,10 @@ class DiagnosisRepository {
           .select()
           .single();
 
-      print('Insert Success. Response: $response');
+      debugPrint('Insert Success. Response: $response');
       return DiagnosisLog.fromJson(response);
     } catch (e) {
-      print('Insert Failed. Error: $e');
+      debugPrint('Insert Failed. Error: $e');
       rethrow;
     }
   }

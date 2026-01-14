@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/raw_data_chunk.dart';
 
@@ -29,7 +30,7 @@ class DataUploadService {
     final user = _supabase.auth.currentUser;
     // Log warning if user is not logged in, but don't crash
     if (user == null) {
-      print('Warning: No user logged in, skipping upload.');
+      debugPrint('Warning: No user logged in, skipping upload.');
       _buffer = [];
       _bufferStartTime = null;
       return;
@@ -51,7 +52,7 @@ class DataUploadService {
     } catch (e) {
       // Silently fail for now, or log error.
       // In production, we'd use a persistent queue (Isar/Hive) for robustness.
-      print('Failed to upload sensor data: $e');
+      debugPrint('Failed to upload sensor data: $e');
     }
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import '../../core/components/app_card.dart';
 import '../../core/components/app_text.dart';
 import '../../core/components/app_button.dart';
+import '../../core/components/app_notification.dart';
 
 class AddEquipmentScreen extends StatefulWidget {
   const AddEquipmentScreen({super.key});
@@ -34,8 +35,10 @@ class _AddEquipmentScreenState extends State<AddEquipmentScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Equipment registered successfully')),
+        showAppNotification(
+          context,
+          'Equipment registered successfully',
+          type: NotificationType.success,
         );
       }
     });

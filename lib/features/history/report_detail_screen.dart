@@ -1,22 +1,127 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../../core/components/app_notification.dart';
 import '../../core/components/app_text.dart';
 import '../../theme/app_theme.dart';
 import '../../data/models/diagnosis_log.dart';
 import 'providers/history_providers.dart';
 import '../maintenance/maintenance_form_screen.dart';
+import '../maintenance/ui/repair_shop_list_screen.dart';
 import '../monitoring/widgets/spectrum_chart.dart';
 
-class ReportDetailScreen extends ConsumerWidget {
+class ReportDetailScreen extends ConsumerStatefulWidget {
   final int diagnosisId;
 
   const ReportDetailScreen({super.key, required this.diagnosisId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ReportDetailScreen> createState() => _ReportDetailScreenState();
+}
+
+class _ReportDetailScreenState extends ConsumerState<ReportDetailScreen> {
+  final GlobalKey _captureKey = GlobalKey();
+  bool _isSharing = false;
+
+  Future<void> _shareReport(int id) async {
+    if (_isSharing) return;
+
+    try {
+      setState(() => _isSharing = true);
+
+      // --- SAFETY DELAY & PRE-CHECKS ---
+      // 1. Wait for UI to stabilize
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) return;
+
+      // 2. Validate RepaintBoundary
+      RenderRepaintBoundary? boundary =
+          _captureKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+
+      if (boundary == null || boundary.debugNeedsPaint) {
+        // Retry once
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (!mounted) return;
+        boundary =
+            _captureKey.currentContext?.findRenderObject()
+                as RenderRepaintBoundary?;
+
+        if (boundary == null) {
+          throw Exception("UI Render Error: Report content not fully loaded.");
+        }
+      }
+
+      // 3. High Quality Image Capture
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      if (byteData == null) throw Exception("Image encoding failed.");
+
+      Uint8List pngBytes = byteData.buffer.asUint8List();
+
+      final fileName =
+          'AntiGravity_Diagnosis_${id}_${DateTime.now().millisecondsSinceEpoch}.png';
+
+      if (kIsWeb) {
+        // --- WEB: Direct Share ---
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [
+              XFile.fromData(pngBytes, mimeType: 'image/png', name: fileName),
+            ],
+            text: 'AntiGravity Diagnosis Report #$id',
+          ),
+        );
+      } else {
+        // --- NATIVE: File Save & Share ---
+        final directory = await getTemporaryDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsBytes(pngBytes);
+
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(file.path)],
+            text: 'AntiGravity Diagnosis Report #$id',
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage = 'Export Error: $e';
+        NotificationType type = NotificationType.error;
+
+        if (e.toString().contains('MissingPluginException')) {
+          errorMessage = 'APP RESTART REQUIRED: Native dependencies updated.';
+        }
+
+        showAppNotification(
+          context,
+          errorMessage,
+          type: type,
+          duration: const Duration(seconds: 4),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // Ideally we fetch the specific log. For now, we find it in the history list.
-    // In a real app, we might want a specific 'fetchLog(id)' provider.
     final historyAsync = ref.watch(diagnosisHistoryProvider);
 
     return Scaffold(
@@ -29,41 +134,97 @@ class ReportDetailScreen extends ConsumerWidget {
         ),
         backgroundColor: Colors.transparent,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.code, color: Colors.white70),
-            onPressed: () {
-              // TODO: Show Raw JSON
-            },
-          ),
+          _isSharing
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(LucideIcons.share_2, color: Colors.white70),
+                  onPressed: () => _shareReport(widget.diagnosisId),
+                  tooltip: 'Share Report',
+                ),
         ],
       ),
       body: historyAsync.when(
         data: (logs) {
           final log = logs.firstWhere(
-            (element) => element.id == diagnosisId,
+            (element) => element.id == widget.diagnosisId,
             orElse: () => logs.first,
           );
-          // Handle case where log is not found (shouldn't happen if navigating from list)
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSummaryCard(log),
-                const SizedBox(height: 24),
-                _buildSectionHeader('AI Analysis'),
-                const SizedBox(height: 12),
-                _buildAnalysisSection(log),
-                const SizedBox(height: 24),
-                _buildSectionHeader('Signal Telemetry'),
-                const SizedBox(height: 12),
-                _buildChartsSection(context, ref, log),
-                const SizedBox(height: 24),
-                _buildSectionHeader('Asset Management'),
-                const SizedBox(height: 12),
-                _buildMaintenanceSection(context, diagnosisId, ref),
-              ],
+          return RepaintBoundary(
+            key: _captureKey,
+            child: Container(
+              color: AppTheme.backgroundBlack, // Ensure background is captured
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSummaryCard(log),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader('AI Analysis'),
+                    const SizedBox(height: 12),
+                    _buildAnalysisSection(log),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader('Signal Telemetry'),
+                    const SizedBox(height: 12),
+                    _buildChartsSection(context, ref, log),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader('Asset Management'),
+                    const SizedBox(height: 12),
+                    _buildMaintenanceSection(context, widget.diagnosisId, ref),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentNeonBlue,
+                          padding: const EdgeInsets.all(16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const RepairShopListScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          LucideIcons.search,
+                          color: Colors.black,
+                        ),
+                        label: const AppText(
+                          'Find Repair Shop',
+                          color: Colors.black,
+                          weight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 48), // Bottom padding
+                    const Center(
+                      child: AppText(
+                        'Generated by MotorMonitor AI',
+                        isMuted: true,
+                        size: AppTextSize.xs,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
             ),
           );
         },
@@ -96,10 +257,10 @@ class ReportDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceDark,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: statusColor.withOpacity(0.5)),
+        border: Border.all(color: statusColor.withValues(alpha: 0.5)),
         boxShadow: [
           BoxShadow(
-            color: statusColor.withOpacity(0.1),
+            color: statusColor.withValues(alpha: 0.1),
             blurRadius: 10,
             spreadRadius: 2,
           ),
@@ -136,7 +297,7 @@ class ReportDetailScreen extends ConsumerWidget {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.2),
+                  color: statusColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: AppText(
@@ -199,13 +360,6 @@ class ReportDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     DiagnosisLog log,
   ) {
-    // In a real scenario, we would fetch the raw data using log.rawDataId
-    // For now, we don't have the raw data loaded in memory unless we fetch it.
-    // Let's assume we show a placeholder or fetch it.
-
-    // For this POC, let's simulate the chart data based on the log status to show the "Highlight" feature (Req 2).
-    // If we can't fetch real data easily without a new provider, we'll generate representative data.
-
     final isDanger = log.status == 'Danger';
     final highlights = isDanger
         ? [const RangeValues(55, 65), const RangeValues(115, 125)]
@@ -231,7 +385,7 @@ class ReportDetailScreen extends ConsumerWidget {
               data: List.generate(
                 1000,
                 (index) => (index % 100 == 0) ? 5.0 : 0.1,
-              ), // Mock data for view
+              ), // Mock data
               samplingRate: 1000,
               highlights: highlights,
             ),
@@ -276,17 +430,13 @@ class ReportDetailScreen extends ConsumerWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: logs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
-                final log =
-                    logs[index]; // Dynamic type from provider, casting needed or specific model
-                // Assuming log acts like a Map or MaintenanceLog model
-                // Since provider retuns List<dynamic>, we should cast in provider ideally.
-                // Assuming it returns MaintenanceLog objects (repo returns MaintenanceLog).
+                final log = logs[index];
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: Colors.white.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.white10),
                   ),
@@ -387,7 +537,6 @@ class ReportDetailScreen extends ConsumerWidget {
 
               if (result == true) {
                 ref.invalidate(maintenanceLogsProvider(diagnosisId));
-                // Also invalidate history/dashboard if maintenance status affects them
                 ref.invalidate(dashboardStatsProvider);
               }
             },

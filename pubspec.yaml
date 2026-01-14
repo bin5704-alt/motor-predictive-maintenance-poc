@@ -42,6 +42,9 @@ dependencies:
   fl_chart: ^1.1.1
   fftea: ^1.5.0+1
   intl: ^0.20.2
+  share_plus: ^12.0.1
+  path_provider: ^2.1.5
+  shared_preferences: ^2.5.4
 
 dev_dependencies:
   flutter_test:

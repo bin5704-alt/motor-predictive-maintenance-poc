@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
+import '../../core/components/app_notification.dart'; // Import AppNotification
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/monitoring/spot_diagnosis_screen.dart';
 import '../../features/history/history_screen.dart';
 import '../../features/profile/my_page_screen.dart';
+import '../../features/history/providers/history_providers.dart'; // Import providers
+import '../../data/repositories/asset_repository.dart'; // Import asset repository
 
 // Simple state for navigation index - in a real app this might be connected to GoRouter
 final _navigationIndexProvider = NotifierProvider<NavigationIndexNotifier, int>(
@@ -20,8 +23,6 @@ class NavigationIndexNotifier extends Notifier<int> {
   }
 }
 
-// ... (keep Notifier)
-
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
@@ -29,14 +30,57 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _refreshController;
+
   @override
   void initState() {
     super.initState();
+    _refreshController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+
     // Reset navigation to Dashboard (index 0) whenever AppShell is mounted (Login success)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(_navigationIndexProvider.notifier).setIndex(0);
     });
+  }
+
+  @override
+  void dispose() {
+    _refreshController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleRefresh() async {
+    _refreshController.repeat();
+    try {
+      // Refresh Dashboard Data
+      ref.invalidate(dashboardStatsProvider);
+      ref.invalidate(assetListProvider);
+
+      // Simulate at least 1 second of loading for effect
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Wait for providers (optional, but good for verification)
+      // await ref.read(dashboardStatsProvider.future);
+
+      if (mounted) {
+        showAppNotification(
+          context,
+          'Dashboard updated',
+          type: NotificationType.success,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } catch (e) {
+      debugPrint('Refresh failed: $e');
+    } finally {
+      _refreshController.stop();
+      _refreshController.reset();
+    }
   }
 
   @override
@@ -55,8 +99,24 @@ class _AppShellState extends ConsumerState<AppShell> {
       appBar: AppBar(
         title: const Text('Quantum Leap'),
         actions: [
+          // Refresh Button
+          if (navIndex == 0) // Only show on Dashboard
+            AnimatedBuilder(
+              animation: _refreshController,
+              builder: (context, child) {
+                return Transform.rotate(
+                  angle: _refreshController.value * 2 * 3.14159,
+                  child: IconButton(
+                    icon: const Icon(LucideIcons.refresh_cw),
+                    onPressed: _handleRefresh,
+                    tooltip: 'Refresh Data',
+                  ),
+                );
+              },
+            ),
+
           Container(
-            margin: const EdgeInsets.only(right: 16),
+            margin: const EdgeInsets.only(right: 16, left: 8),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.green.withValues(alpha: 0.1),

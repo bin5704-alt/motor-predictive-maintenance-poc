@@ -105,3 +105,24 @@ CREATE POLICY "Users can view own diagnosis" ON public.diagnosis_logs FOR SELECT
 -- For simple POC, allow Authenticated users to select/insert.
 CREATE POLICY "Auth users can manage maintenance" ON public.maintenance_logs FOR ALL USING (auth.role() = 'authenticated');
 
+
+-- [PHASE 4] ASSET REGISTRATION
+-- 16. Create Assets Table
+CREATE TABLE IF NOT EXISTS public.assets (
+  id bigint generated always as identity primary key,
+  user_id uuid references auth.users(id) not null,
+  name text not null,
+  type text not null, -- e.g., 'Induction Motor'
+  image_url text, -- Optional photo of the equipment
+  specifications jsonb, -- {rpm, voltage, bearings: {de, nde}}
+  created_at timestamptz default now()
+);
+
+-- 17. Enable RLS for Assets
+ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
+
+-- 18. RLS Policies for Assets
+CREATE POLICY "Users can insert own assets" ON public.assets FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can view own assets" ON public.assets FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can update own assets" ON public.assets FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own assets" ON public.assets FOR DELETE USING (auth.uid() = user_id);

@@ -80,10 +80,11 @@ class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
                       sensorDataAsync.when(
                         data: (_) {
                           // Using local buffer for smooth rendering rather than just last chunk
-                          if (_displayBuffer.isEmpty)
+                          if (_displayBuffer.isEmpty) {
                             return const Center(
                               child: CircularProgressIndicator(),
                             );
+                          }
 
                           return Padding(
                             padding: const EdgeInsets.all(16.0),
