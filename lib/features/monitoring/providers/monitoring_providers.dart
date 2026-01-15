@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/services/data_upload_service.dart';
@@ -23,14 +24,27 @@ final dataUploadServiceProvider = Provider<DataUploadService>((ref) {
 final sensorDataStreamProvider = StreamProvider.autoDispose<List<double>>((
   ref,
 ) {
-  final simulationService = ref.watch(simulationServiceProvider);
-  final uploadService = ref.watch(dataUploadServiceProvider);
-
-  simulationService.startSimulation();
-
-  // Intercept stream to feed into upload service
-  return simulationService.dataStream.map((data) {
-    uploadService.addData(data, simulationService.samplingRate);
-    return data;
-  });
+  // Listen to the 'ai_feature_vectors' table in Supabase
+  // Fetching the latest record sorted by creation time
+  return Supabase.instance.client
+      .from('ai_feature_vectors')
+      .stream(primaryKey: ['id'])
+      .order('id', ascending: false)
+      .limit(1)
+      .map((rows) {
+        debugPrint('Incoming rows: $rows'); // Debug print for incoming rows
+        if (rows.isEmpty) {
+          return <double>[];
+        }
+        final row = rows.first;
+        final fftData = row['fft_magnitude'];
+        if (fftData is List) {
+          final data = fftData.map((e) => (e as num).toDouble()).toList();
+          debugPrint(
+            'FFT data length: ${data.length}',
+          ); // Debug print for data length
+          return data;
+        }
+        return <double>[];
+      });
 });

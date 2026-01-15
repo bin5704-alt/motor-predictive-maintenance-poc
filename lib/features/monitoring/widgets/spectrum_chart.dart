@@ -1,6 +1,4 @@
 import 'dart:math';
-import 'dart:typed_data';
-import 'package:fftea/fftea.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -174,6 +172,33 @@ class _SpectrumChartState extends State<SpectrumChart> {
     List<double> rawData,
     int samplingRate,
   ) {
+    // Bypass FFT calculation since we are receiving pre-computed FFT data from Supabase
+    // Input 'rawData' is already [FrequencyMagnitude_0, FrequencyMagnitude_1, ...]
+
+    final List<MapEntry<double, double>> spectrum = [];
+    final int size = rawData.length;
+    if (size == 0) return [];
+
+    // Map each point to its Frequency
+    // Assuming the vector represents 0 Hz to Nyquist Frequency (samplingRate / 2)
+    final double maxFreq = samplingRate / 2;
+    final double freqResolution = size > 1 ? maxFreq / size : 1;
+
+    for (int i = 0; i < size; i++) {
+      final frequency = i * freqResolution;
+      final magnitude = rawData[i];
+      spectrum.add(MapEntry(frequency, magnitude));
+    }
+
+    return spectrum;
+  }
+
+  /* 
+  // Old client-side FFT Logic - Deprecated for Supabase implementation
+  List<MapEntry<double, double>> _calculateFFT_OLD(
+    List<double> rawData,
+    int samplingRate,
+  ) {
     if (rawData.isEmpty) return [];
 
     final n = rawData.length;
@@ -204,4 +229,5 @@ class _SpectrumChartState extends State<SpectrumChart> {
 
     return spectrum;
   }
+  */
 }

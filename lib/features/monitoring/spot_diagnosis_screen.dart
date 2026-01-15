@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
@@ -16,6 +18,7 @@ import '../../data/models/diagnosis_log.dart';
 import '../history/providers/history_providers.dart';
 import '../../core/components/app_notification.dart';
 import '../diagnosis/services/diagnosis_engine.dart';
+import '../diagnosis/services/diagnosis_service.dart';
 import '../maintenance/ui/repair_shop_list_screen.dart';
 import '../../data/models/asset.dart';
 import '../../data/repositories/asset_repository.dart';
@@ -44,6 +47,8 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
   // Tab controller for the 3 modes
   late TabController _tabController;
   final List<double> _liveBuffer = [];
+  List<double> _timeData = [];
+  List<double> _freqData = [];
 
   Timer? _timer;
 
@@ -70,6 +75,16 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
       return;
     }
 
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      showAppNotification(
+        context,
+        'Authentication required.',
+        type: NotificationType.error,
+      );
+      return;
+    }
+
     setState(() {
       _phase = DiagnosisPhase.measuring;
       _countdown = 10;
@@ -80,10 +95,8 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
       _statusMessage = 'Collecting sensor data...';
     });
 
-    // Start Simulation via Riverpod if not auto-started
-    // The visual charts depend on the stream provider.
-    // We don't strictly need to "control" it here other than ensuring the provider is alive.
-
+    // Run 10s Timer strictly for "Collection" phase
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
@@ -91,55 +104,187 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
             _countdown--;
           } else {
             timer.cancel();
-            _startAIAnalysis();
+            _startAIAnalysis(user.id);
           }
         });
       }
     });
   }
 
-  void _startAIAnalysis() {
+  Future<void> _startAIAnalysis(String userId) async {
+    debugPrint('--- _startAIAnalysis Called ---');
     setState(() {
       _phase = DiagnosisPhase.analyzing;
       _statusMessage = 'AI Model Analyzing...';
     });
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        _completeDiagnosis();
+    try {
+      // 1. Trigger Backend Diagnosis AFTER 10s collection
+      final service = DiagnosisService();
+      final success = await service.triggerDiagnosis(userId);
+
+      if (!success) {
+        throw 'AI Server Connection Failed. Check if server is running at http://localhost:8000';
       }
-    });
+
+      // 2. Fetch Results on Success
+      await _fetchDiagnosisResults();
+    } catch (e) {
+      debugPrint('Diagnosis Error: $e');
+      if (mounted) {
+        setState(() {
+          _phase = DiagnosisPhase.idle;
+          _statusMessage = 'Error: $e';
+        });
+        showAppNotification(
+          context,
+          'Diagnosis Error: $e',
+          type: NotificationType.error,
+        );
+      }
+    }
   }
 
-  void _completeDiagnosis() async {
-    final engine = ref.read(diagnosisEngineProvider);
-    // Determine context data (live buffer or mock)
-    // For now we pass empty, the mock engine ignores it, real engine will use buffer later.
-    final result = await engine.analyze(_liveBuffer);
+  Future<void> _fetchDiagnosisResults() async {
+    debugPrint('--- _fetchDiagnosisResults Called ---');
+    if (!mounted) return;
 
     setState(() {
-      _phase = DiagnosisPhase.completed;
-      _lastScore = result.score;
-      _lastMetrics = result.metrics;
-      _prescriptionTitle = result.prescriptionTitle;
-      _prescriptionDesc = result.prescriptionDesc;
-      _statusMessage = 'Diagnosis Complete';
+      _statusMessage = 'Retrieving results...';
     });
 
-    // Switch to results tab automatically
-    _tabController.animateTo(0);
+    try {
+      debugPrint('Fetching data from Supabase...');
+      // Fetch latest data from Supabase
+      // Add a small delay to ensure DB write is committed if latency is high
+      await Future.delayed(const Duration(milliseconds: 500));
 
-    // Save to Supabase (Async)
-    _saveLog(
-      result.score,
-      result.status,
-      result.metrics['rms'] as double,
-      result.metrics['peak'] as double,
-      result.metrics['freq'] as double,
-    );
+      final response = await Supabase.instance.client
+          .from('ai_feature_vectors')
+          .select()
+          .order('id', ascending: false)
+          .limit(1)
+          .maybeSingle();
 
-    if (result.status == 'Danger' && mounted) {
-      _showDangerDialog();
+      if (response == null) {
+        throw 'No analysis data found. Please ensure data ingestion is running.';
+      }
+      debugPrint(
+        'Data fetched: ${response['id']} (timestamp: ${response['created_at']})',
+      );
+
+      // Safe Parsing Helper
+      List<double> parseList(dynamic input) {
+        if (input == null) return [];
+        try {
+          if (input is List)
+            return input.map((e) => (e as num).toDouble()).toList();
+          if (input is String) {
+            final decoded = jsonDecode(input);
+            if (decoded is List)
+              return decoded.map((e) => (e as num).toDouble()).toList();
+          }
+        } catch (e) {
+          debugPrint('Error parsing list: $e');
+        }
+        return [];
+      }
+
+      final rawData = parseList(response['raw_data']);
+      final fftData = parseList(response['fft_magnitude']);
+
+      final dbScore = (response['anomaly_score'] as num?)?.toDouble() ?? 0.0;
+      final dbStatus = response['status'] as String? ?? 'Normal';
+
+      // Calculate Metrics Locally (since backend doesn't provide them)
+      double calcRms = 0.0;
+      double calcPeak = 0.0;
+      double calcFreq = 0.0;
+
+      if (rawData.isNotEmpty) {
+        final sumSquare = rawData.fold(0.0, (sum, val) => sum + (val * val));
+        calcRms = sqrt(sumSquare / rawData.length);
+        calcPeak = rawData.fold(0.0, (prev, val) => max(prev, val.abs()));
+      }
+
+      if (fftData.isNotEmpty) {
+        // Find index of max magnitude
+        int maxIdx = 0;
+        double maxVal = 0.0;
+        for (int i = 0; i < fftData.length; i++) {
+          if (fftData[i] > maxVal) {
+            maxVal = fftData[i];
+            maxIdx = i;
+          }
+        }
+        // Rough approximation: Index * Scale (Assuming ~50Hz per bin for now or just index)
+        calcFreq = maxIdx * 10.0;
+      }
+
+      // Generate Prescription Locally
+      String pTitle = 'Optimal Operation';
+      String pDesc = 'Equipment is running within normal parameters.';
+
+      if (dbStatus == 'Danger') {
+        pTitle = 'Critical Failure Detected';
+        pDesc =
+            'High probability of bearing fault. Immediate inspection required.';
+      } else if (dbStatus == 'Caution') {
+        pTitle = 'Maintenance Specifics';
+        pDesc = 'Early signs of wear detected. Schedule maintenance soon.';
+      }
+
+      debugPrint('Parsed Score: $dbScore, Status: $dbStatus');
+
+      if (mounted) {
+        setState(() {
+          _timeData = rawData;
+          _freqData = fftData;
+
+          _lastScore = ((1.0 - dbScore) * 100).clamp(
+            0.0,
+            100.0,
+          ); // Convert Anomaly (0-1) to Health (100-0)
+          _statusMessage = 'Diagnosis Complete: $dbStatus';
+
+          _lastMetrics = {'rms': calcRms, 'peak': calcPeak, 'freq': calcFreq};
+
+          _prescriptionTitle = pTitle;
+          _prescriptionDesc = pDesc;
+
+          _phase = DiagnosisPhase.completed;
+        });
+
+        // Switch to results tab
+        _tabController.animateTo(0);
+
+        // Save to Supabase (Async)
+        await _saveLog(
+          ((1.0 - dbScore) * 100).clamp(0.0, 100.0),
+          dbStatus,
+          calcRms,
+          calcPeak,
+          calcFreq,
+        );
+
+        if (dbStatus == 'Danger') {
+          _showDangerDialog();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching diagnosis data: $e');
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'Analysis Failed: $e'; // Show error in UI
+          _phase = DiagnosisPhase.idle;
+        });
+
+        showAppNotification(
+          context,
+          'Analysis Failed: $e',
+          type: NotificationType.error,
+        );
+      }
     }
   }
 
@@ -252,15 +397,18 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Watch the real-time stream
-    final streamAsync = ref.watch(sensorDataStreamProvider);
-
-    // Buffer logic mainly for the real-time tabs
-    streamAsync.whenData((chunk) {
-      if (_liveBuffer.length > 2048) {
-        _liveBuffer.removeRange(0, chunk.length);
-      }
-      _liveBuffer.addAll(chunk);
+    // Listen to the real-time stream properly
+    ref.listen(sensorDataStreamProvider, (prev, next) {
+      next.whenData((chunk) {
+        if (chunk.isNotEmpty) {
+          setState(() {
+            if (_liveBuffer.length > 2048) {
+              _liveBuffer.removeRange(0, chunk.length);
+            }
+            _liveBuffer.addAll(chunk);
+          });
+        }
+      });
     });
 
     return Scaffold(
@@ -331,8 +479,10 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
           // TAB 2: Time Domain (Oscilloscope)
           _buildChartTab(
             title: 'Real-time Oscilloscope',
-            child: _liveBuffer.isNotEmpty
-                ? OscilloscopeChart(data: _liveBuffer)
+            child: (_timeData.isNotEmpty || _liveBuffer.isNotEmpty)
+                ? OscilloscopeChart(
+                    data: _timeData.isNotEmpty ? _timeData : _liveBuffer,
+                  )
                 : const Center(
                     child: Text(
                       'Waiting for data...',
@@ -344,8 +494,11 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
           // TAB 3: Frequency Domain (Spectrum)
           _buildChartTab(
             title: 'Frequency Spectrum (FFT)',
-            child: _liveBuffer.isNotEmpty
-                ? SpectrumChart(data: _liveBuffer, samplingRate: 1000)
+            child: (_freqData.isNotEmpty || _liveBuffer.isNotEmpty)
+                ? SpectrumChart(
+                    data: _freqData.isNotEmpty ? _freqData : _liveBuffer,
+                    samplingRate: 1000,
+                  )
                 : const Center(
                     child: Text(
                       'Waiting for data...',
@@ -569,7 +722,7 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
             Expanded(
               child: _MetricCard(
                 label: 'RMS',
-                value: '${_lastMetrics!['rms'].toStringAsFixed(2)} g',
+                value: '${(_lastMetrics?['rms'] ?? 0).toStringAsFixed(2)} g',
                 icon: LucideIcons.activity,
               ),
             ),
@@ -577,7 +730,7 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
             Expanded(
               child: _MetricCard(
                 label: 'Peak',
-                value: '${_lastMetrics!['peak'].toStringAsFixed(2)} g',
+                value: '${(_lastMetrics?['peak'] ?? 0).toStringAsFixed(2)} g',
                 icon: Icons.bar_chart,
               ),
             ),
@@ -585,7 +738,7 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
             Expanded(
               child: _MetricCard(
                 label: 'Freq',
-                value: '${_lastMetrics!['freq'].toStringAsFixed(0)} Hz',
+                value: '${(_lastMetrics?['freq'] ?? 0).toStringAsFixed(0)} Hz',
                 icon: LucideIcons.zap,
               ),
             ),
