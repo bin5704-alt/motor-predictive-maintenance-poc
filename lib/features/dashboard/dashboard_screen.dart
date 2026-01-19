@@ -3,6 +3,7 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/history/providers/history_providers.dart';
 import '../../data/models/asset.dart'; // Import Asset model
+import '../../data/models/diagnosis_log.dart'; // Import DiagnosisLog model
 import 'data/equipment_model.dart';
 
 import '../../core/components/app_card.dart';
@@ -21,6 +22,8 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Phase 4: Use Asset List instead of Mock Equipment
     final assetsAsync = ref.watch(assetListProvider);
+    // Watch history to get latest status
+    final historyAsync = ref.watch(diagnosisHistoryProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
@@ -32,25 +35,63 @@ class DashboardScreen extends ConsumerWidget {
           // Phase 7: Live Repair Tracker
           const LiveRepairTracker(),
           const SizedBox(height: 24),
+          const SizedBox(height: 24),
           assetsAsync.when(
             data: (assets) {
-              // Map Assets to UI Equipment Model for compatibility
-              final equipmentList = assets.map((asset) {
-                return Equipment(
-                  id: asset.id,
-                  name: asset.name,
-                  status: 'Operational', // Default for now
-                  efficiency: 98.0, // Default for now
-                  lastUpdated: asset.createdAt,
-                );
-              }).toList();
+              return historyAsync.when(
+                data: (logs) {
+                  // Create a map of latest log per equipment
+                  // Logs are already ordered by created_at desc, so first match is latest
+                  final latestLogMap = <int, DiagnosisLog>{};
+                  for (var log in logs) {
+                    if (log.equipmentId != null &&
+                        !latestLogMap.containsKey(log.equipmentId)) {
+                      latestLogMap[log.equipmentId!] = log;
+                    }
+                  }
 
-              return Column(
-                children: [
-                  _buildStatsGrid(context, equipmentList, ref),
-                  const SizedBox(height: 24),
-                  _buildMainSection(context, assets), // Pass assets directly
-                ],
+                  // Map Assets to UI Equipment Model
+                  final equipmentList = assets.map((asset) {
+                    final latestLog = latestLogMap[asset.id];
+
+                    // Default values
+                    String status = 'Operational';
+                    double efficiency = 98.0;
+
+                    if (latestLog != null) {
+                      // Map status
+                      if (latestLog.status == 'Danger') {
+                        status = 'Critical';
+                      } else if (latestLog.status == 'Caution') {
+                        status = 'Maintenance';
+                      } else {
+                        status = 'Operational';
+                      }
+
+                      // Map efficiency (score)
+                      efficiency = latestLog.score;
+                    }
+
+                    return Equipment(
+                      id: asset.id,
+                      name: asset.name,
+                      status: status,
+                      efficiency: efficiency,
+                      lastUpdated: asset.createdAt,
+                    );
+                  }).toList();
+
+                  return Column(
+                    children: [
+                      _buildStatsGrid(context, equipmentList, ref),
+                      const SizedBox(height: 24),
+                      _buildMainSection(context, assets, latestLogMap),
+                    ],
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) =>
+                    Center(child: Text('Error loading history: $e')),
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -223,8 +264,11 @@ class DashboardScreen extends ConsumerWidget {
     ref.read(appNavigationProvider.notifier).setIndex(2);
   }
 
-  Widget _buildMainSection(BuildContext context, List<Asset> assets) {
-    // Changed to List<Asset>
+  Widget _buildMainSection(
+    BuildContext context,
+    List<Asset> assets,
+    Map<int, DiagnosisLog> latestLogs,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -279,12 +323,31 @@ class DashboardScreen extends ConsumerWidget {
             itemCount: assets.length,
             itemBuilder: (context, index) {
               final asset = assets[index];
-              // Map to Equipment for UI
+              final latestLog = latestLogs[asset.id];
+
+              // Default values
+              String status = 'Operational';
+              double efficiency = 98.0;
+
+              if (latestLog != null) {
+                // Map status
+                if (latestLog.status == 'Danger') {
+                  status = 'Critical';
+                } else if (latestLog.status == 'Caution') {
+                  status = 'Maintenance';
+                } else {
+                  status = 'Operational';
+                }
+
+                // Map efficiency (score)
+                efficiency = latestLog.score;
+              }
+
               final equipment = Equipment(
                 id: asset.id,
                 name: asset.name,
-                status: 'Operational', // Default
-                efficiency: 98.0, // Default
+                status: status,
+                efficiency: efficiency,
                 lastUpdated: asset.createdAt,
               );
 

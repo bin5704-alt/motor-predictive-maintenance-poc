@@ -56,6 +56,10 @@ class AssetRepository {
 
   Future<void> deleteAsset(int id) async {
     try {
+      // 1. Cascade Delete: Remove associated diagnosis logs first
+      await _client.from('diagnosis_logs').delete().eq('equipment_id', id);
+
+      // 2. Delete the asset itself
       await _client.from('assets').delete().eq('id', id);
     } catch (e) {
       debugPrint('deleteAsset Error: $e');

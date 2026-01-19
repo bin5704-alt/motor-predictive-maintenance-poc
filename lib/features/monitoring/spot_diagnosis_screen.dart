@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,6 +23,7 @@ import '../diagnosis/services/diagnosis_service.dart';
 import '../maintenance/ui/repair_shop_list_screen.dart';
 import '../../data/models/asset.dart';
 import '../../data/repositories/asset_repository.dart';
+import '../../core/utils/signal_processing.dart';
 
 enum DiagnosisPhase { idle, measuring, analyzing, completed }
 
@@ -172,17 +174,42 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
       debugPrint(
         'Data fetched: ${response['id']} (timestamp: ${response['created_at']})',
       );
+      debugPrint('Available keys: ${response.keys.toList()}');
+      debugPrint(
+        'Raw FFT Magnitude Type: ${response['fft_magnitude'].runtimeType}',
+      );
+      debugPrint(
+        'Raw FFT Magnitude Preview: ${response['fft_magnitude'].toString().substring(0, min(100, response['fft_magnitude'].toString().length))}...',
+      );
 
       // Safe Parsing Helper
       List<double> parseList(dynamic input) {
         if (input == null) return [];
         try {
-          if (input is List)
+          if (input is List) {
             return input.map((e) => (e as num).toDouble()).toList();
+          }
           if (input is String) {
-            final decoded = jsonDecode(input);
-            if (decoded is List)
-              return decoded.map((e) => (e as num).toDouble()).toList();
+            // Try Standard JSON
+            try {
+              final decoded = jsonDecode(input);
+              if (decoded is List) {
+                return decoded.map((e) => (e as num).toDouble()).toList();
+              }
+            } catch (_) {
+              // Ignore JSON error and try manual parsing
+            }
+
+            // Fallback: Manual Parsing for "{1,2,3}" (Postgres) or "[1 2 3]" (Numpy)
+            String cleaned = input.replaceAll(RegExp(r'[\[\]\{\}]'), '');
+            // Split by comma or multiple spaces
+            final parts = cleaned.split(RegExp(r'[,\s]+'));
+
+            return parts
+                .where((s) => s.trim().isNotEmpty)
+                .map((s) => double.tryParse(s.trim()))
+                .whereType<double>()
+                .toList();
           }
         } catch (e) {
           debugPrint('Error parsing list: $e');
@@ -191,7 +218,66 @@ class _SpotDiagnosisScreenState extends ConsumerState<SpotDiagnosisScreen>
       }
 
       final rawData = parseList(response['raw_data']);
-      final fftData = parseList(response['fft_magnitude']);
+      List<double> fftData = parseList(response['fft_magnitude']);
+
+      // [Fallback] Calculate FFT locally if backend data is missing
+      if (fftData.isEmpty && rawData.isNotEmpty) {
+        debugPrint(
+          'FFT Data missing (null/empty). Calculating locally using fftea...',
+        );
+        try {
+          // 1. DC Removal (Zero-Centering) - Match Backend Spec
+          double mean = 0.0;
+          if (rawData.isNotEmpty) {
+            mean = rawData.reduce((a, b) => a + b) / rawData.length;
+          }
+          final zeroCentered = rawData.map((e) => e - mean).toList();
+
+          // 2. Apply Window (Hann)
+          // 2. Apply Window (Hann)
+          // Manual Hann Window implementation locally to avoid library dependency
+          final windowedData = List<double>.filled(zeroCentered.length, 0.0);
+          for (int i = 0; i < zeroCentered.length; i++) {
+            // Hann Window: 0.5 * (1 - cos(2*pi*n / (N-1)))
+            final mult =
+                0.5 * (1 - cos(2 * pi * i / (zeroCentered.length - 1)));
+            windowedData[i] = zeroCentered[i] * mult;
+          }
+
+          // 2. Perform Custom FFT (Web Compatible, Zero-Padding)
+          // Pad to next power of 2 for Radix-2 FFT
+          final n = windowedData.length;
+          final p = (log(n) / log(2)).ceil();
+          final paddedSize = pow(2, p).toInt();
+
+          final paddedData = List<double>.filled(paddedSize, 0.0);
+          for (int i = 0; i < n; i++) {
+            paddedData[i] = windowedData[i];
+          }
+
+          final spectrum = SignalProcessor.computeFFT(paddedData);
+
+          // 3. Extract Magnitude
+          // Just take the first half (0 to Nyquist)
+          // Resolution change: Fs / paddedSize ~ 0.3Hz
+          fftData = spectrum.sublist(0, paddedSize ~/ 2);
+
+          // 4. Normalize (Relative Amplitude)
+          final maxMag = fftData.isEmpty ? 0.0 : fftData.reduce(max);
+          if (maxMag > 0) {
+            fftData = fftData.map((e) => e / maxMag).toList();
+          }
+          debugPrint(
+            'Local FFT Success (Custom). Generated ${fftData.length} bins.',
+          );
+        } catch (e, stack) {
+          debugPrint('Local FFT Failed: $e\n$stack');
+        }
+      }
+
+      debugPrint(
+        'Resulting FFT Data Size: ${fftData.length}, First 5: ${fftData.take(5).toList()}',
+      );
 
       final dbScore = (response['anomaly_score'] as num?)?.toDouble() ?? 0.0;
       final dbStatus = response['status'] as String? ?? 'Normal';

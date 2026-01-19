@@ -129,6 +129,61 @@ class _AssetFormScreenState extends ConsumerState<AssetFormScreen> {
     }
   }
 
+  Future<void> _deleteAsset() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surfaceDark,
+        title: const AppText('Delete Asset?', weight: FontWeight.bold),
+        content: const AppText(
+          'Are you sure you want to delete this asset?\nAll associated diagnosis history will also be permanently deleted.',
+          isMuted: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const AppText('Cancel', isMuted: true),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const AppText('Delete', color: AppTheme.statusRed),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final repo = ref.read(assetRepositoryProvider);
+      if (widget.asset != null) {
+        await repo.deleteAsset(widget.asset!.id);
+      }
+
+      if (mounted) {
+        showAppNotification(
+          context,
+          'Asset deleted successfully',
+          type: NotificationType.success,
+        );
+        Navigator.pop(context); // Close screen
+      }
+      ref.invalidate(assetListProvider);
+      ref.invalidate(diagnosisHistoryProvider);
+    } catch (e) {
+      if (mounted) {
+        showAppNotification(
+          context,
+          'Failed to delete asset: $e',
+          type: NotificationType.error,
+        );
+      }
+      setState(() => _isSubmitting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.asset != null;
@@ -213,6 +268,16 @@ class _AssetFormScreenState extends ConsumerState<AssetFormScreen> {
               ),
 
               if (isEditing) ...[
+                const SizedBox(height: 16),
+                AppButton(
+                  label: 'Delete Asset',
+                  onPressed: _isSubmitting ? null : _deleteAsset,
+                  variant: AppButtonVariant.outline,
+                  fullWidth: true,
+                  // We assume AppButton handles outline styling well.
+                  // If color customization is needed we might need to change AppButton,
+                  // but outline is a standard "secondary/destructive" pattern safe choice.
+                ),
                 const SizedBox(height: 48),
                 const Divider(color: Colors.white10),
                 const SizedBox(height: 24),
